@@ -1,0 +1,141 @@
+{
+  "projectType": "saas",
+  "projectName": "Web Scrapping Hub",
+  "projectDescription": "Full-stack streaming application for movies, series, and anime with web scraping capabilities.",
+  "theme": "almond",
+  "primaryColor": "#244455",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/local-setup",
+              "installation/docker-deployment",
+              "installation/casaos-deployment"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/catalog-browsing",
+              "features/search",
+              "features/video-player",
+              "features/web-scraping"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/backend",
+              "architecture/frontend",
+              "architecture/extractors"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/backend-config",
+              "configuration/target-urls",
+              "configuration/environment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/overview",
+              "api/version",
+              "api/secciones",
+              "api/listado",
+              "api/search",
+              "api/serie",
+              "api/pelicula",
+              "api/anime",
+              "api/iframe-player"
+            ]
+          },
+          {
+            "group": "Extractors",
+            "pages": [
+              "api/extractors/generic-extractor",
+              "api/extractors/serie-extractor",
+              "api/extractors/iframe-extractor"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Contributing",
+            "pages": [
+              "development/contributing",
+              "development/project-structure",
+              "development/testing"
+            ]
+          },
+          {
+            "group": "Frontend",
+            "pages": [
+              "development/frontend/components",
+              "development/frontend/hooks",
+              "development/frontend/routing"
+            ]
+          },
+          {
+            "group": "Backend",
+            "pages": [
+              "development/backend/flask-setup",
+              "development/backend/extractors",
+              "development/backend/utilities"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Catalog browsing for movies, series, and anime",
+    "Advanced search functionality with deep search",
+    "Integrated video player with episode navigation",
+    "Cloudflare bypass with cloudscraper",
+    "Multi-architecture Docker support (AMD64, ARM64, ARMv7)",
+    "Modular extractor system for web scraping",
+    "Clean URL pagination system",
+    "React frontend with TailwindCSS",
+    "Flask RESTful API backend",
+    "Version checking and update notifications"
+  ],
+  "publicApiSurface": [
+    "GET /api/version",
+    "GET /api/secciones",
+    "GET /api/listado",
+    "GET /api/deep-search",
+    "GET /api/serie/<slug>",
+    "GET /api/pelicula/<slug>",
+    "GET /api/anime/<slug>",
+    "GET /api/iframe_player",
+    "extraer_listado(html)",
+    "extraer_info_pelicula(html)",
+    "extraer_episodios_serie(url)",
+    "extraer_iframe_reproductor(url)"
+  ]
+}
