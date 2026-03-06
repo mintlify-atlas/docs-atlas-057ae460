@@ -1,0 +1,328 @@
+---
+title: 'Catalog Browsing'
+description: 'Navigate through movies, series, and anime with intelligent pagination and section filtering'
+icon: 'grid-2'
+---
+
+## Overview
+
+Web Scraping Hub provides a powerful catalog browsing system that allows users to explore thousands of movies, series, and anime titles. The catalog is organized into sections with intelligent pagination and clean URL routing.
+
+## Catalog Sections
+
+The platform organizes content into distinct sections for easy navigation:
+
+<CardGroup cols={3}>
+  <Card title="Movies" icon="film">
+    Browse the latest movies in Latino format with comprehensive metadata
+  </Card>
+  <Card title="Series" icon="tv">
+    Explore TV series with episodic content organized by seasons
+  </Card>
+  <Card title="Anime" icon="sparkles">
+    Discover anime titles and movies with specialized categorization
+  </Card>
+</CardGroup>
+
+### Available Sections
+
+The backend supports multiple content sections configured in `config.py`. Each section has:
+
+- **Unique URL endpoint** for content scraping
+- **Section identifier** for filtering and routing
+- **Content type classification** (movie, series, anime)
+
+```python app.py:20-21
+SECCIONES = {s['nombre']: s['url'] for s in TARGET_URLS}
+SECCIONES_LIST = list(SECCIONES.keys())
+```
+
+## Pagination System
+
+### Clean URL Routing
+
+The platform uses clean, SEO-friendly URLs for pagination instead of query parameters:
+
+<CodeGroup>
+```text Good - Clean URLs
+http://localhost:1234/page/1
+http://localhost:1234/page/2
+http://localhost:1234/page/3
+```
+
+```text Avoided - Query Parameters
+http://localhost:1234/?page=1
+http://localhost:1234/?page=2
+```
+</CodeGroup>
+
+### Backend Pagination Logic
+
+The API handles page-based content retrieval with automatic URL construction:
+
+```python app.py:114-130
+pagina = int(request.args.get('pagina', 1))
+if not seccion:
+    seccion = SECCIONES_LIST[0]
+
+url = SECCIONES[seccion_real]
+if pagina > 1:
+    if seccion_real != 'K-Drama':
+        url = f"{url}/page/{pagina}"
+    else:
+        url = f"{url}page/{pagina}"
+```
+
+<Note>
+The pagination logic includes special handling for different section URL patterns, ensuring compatibility with various content sources.
+</Note>
+
+### Frontend Pagination Component
+
+The `Pagination` component provides an intuitive navigation experience:
+
+<Accordion title="Key Features">
+  - **Smart page range display**: Shows up to 5 page numbers at a time
+  - **Current page highlighting**: Active page displayed with neon cyan styling
+  - **Previous/Next navigation**: Arrow buttons with disabled state handling
+  - **Responsive design**: Hides labels on mobile, shows icons only
+  - **Loading state support**: Disables navigation during data fetching
+</Accordion>
+
+```tsx Pagination.tsx:17-43
+const getPageNumbers = () => {
+  const pages = [];
+  const maxVisible = 5;
+  let start = 1;
+  let end = totalPages;
+  
+  if (totalPages <= maxVisible) {
+    start = 1;
+    end = totalPages;
+  } else {
+    if (currentPage <= 3) {
+      start = 1;
+      end = 5;
+    } else if (currentPage >= totalPages - 2) {
+      start = totalPages - 4;
+      end = totalPages;
+    } else {
+      start = currentPage - 2;
+      end = currentPage + 2;
+    }
+  }
+  // ...
+};
+```
+
+## Catalog Grid Display
+
+### Responsive Grid Layout
+
+The catalog uses a fully responsive grid that adapts to different screen sizes:
+
+| Screen Size | Columns | Breakpoint |
+|-------------|---------|------------|
+| Mobile      | 2       | Default    |
+| Small       | 2       | sm:        |
+| Medium      | 3       | md:        |
+| Large       | 4       | lg:        |
+| XL          | 5       | xl:        |
+| 2XL         | 6       | 2xl:       |
+
+```tsx CatalogGrid.tsx:27
+<div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+```
+
+### Content Cards
+
+Each catalog item displays as an interactive card with:
+
+<Tabs>
+  <Tab title="Visual Elements">
+    - **Poster image** with 3:4 aspect ratio
+    - **Type badge** (Movie/Series/Anime) with color coding
+    - **Hover overlay** with play icon and metadata
+    - **Neon border effect** on hover
+  </Tab>
+  
+  <Tab title="Metadata Display">
+    - **Title** with text truncation (2 lines max)
+    - **Year** of release
+    - **Language** (typically Latino)
+    - **Genres** list
+  </Tab>
+  
+  <Tab title="Interactive Features">
+    - **Click to play** - Routes to player page
+    - **Hover animations** - Scale and border effects
+    - **Lazy loading** - Images load as needed
+    - **Type-based routing** - Correct URL for each content type
+  </Tab>
+</Tabs>
+
+### Type-Based Color Coding
+
+The platform uses distinct color themes for different content types:
+
+```tsx CatalogGrid.tsx:48-56
+${item.type === 'series'
+  ? 'bg-electric-sky text-space-black border-electric-sky'
+  : item.type === 'anime'
+    ? 'bg-magenta-pink text-space-black border-magenta-pink'
+    : 'bg-fuchsia-pink text-space-black border-fuchsia-pink'
+}
+```
+
+<CardGroup cols={3}>
+  <Card title="Movies" icon="film" color="#ff006e">
+    Fuchsia Pink theme with matching glows
+  </Card>
+  <Card title="Series" icon="tv" color="#00d9ff">
+    Electric Sky (cyan) with neon effects
+  </Card>
+  <Card title="Anime" icon="sparkles" color="#ff00ff">
+    Magenta Pink for anime content
+  </Card>
+</CardGroup>
+
+## Loading States
+
+The catalog includes skeleton loading states for smooth user experience:
+
+```tsx CatalogGrid.tsx:12-24
+if (loading) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      {Array.from({ length: 20 }).map((_, index) => (
+        <div key={index} className="animate-pulse">
+          <div className="bg-gray-700 rounded-lg aspect-[3/4] mb-2"></div>
+          <div className="h-4 bg-gray-700 rounded mb-2"></div>
+          <div className="h-3 bg-gray-700 rounded w-3/4"></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+<Tip>
+The loading state displays 20 skeleton cards with pulsing animations, matching the typical catalog page size.
+</Tip>
+
+## Data Extraction
+
+Catalog data is extracted from web sources using the `generic_extractor` module:
+
+### Extraction Process
+
+1. **HTML Fetching**: Cloudflare-bypassed HTTP requests
+2. **DOM Parsing**: BeautifulSoup selects article elements
+3. **Data Extraction**: Metadata pulled from structured HTML
+4. **Image Handling**: Smart lazy-loading detection and fallbacks
+5. **Type Classification**: Automatic content type identification
+
+```python generic_extractor.py:4-51
+def extraer_listado(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    articulos = soup.select('article.item')
+    datos = []
+    for articulo in articulos:
+        # Extract poster, title, image, year, genres, language, type
+        # Handle lazy-loading images with fallbacks
+        # Classify content type from CSS classes
+```
+
+### Image Optimization
+
+The extractor includes sophisticated image handling:
+
+<Steps>
+  <Step title="Check Data Attributes">
+    Looks for `data-srcset`, `data-src`, `data-lazy-src` first
+  </Step>
+  <Step title="Fallback to Noscript">
+    If placeholder detected, searches for noscript tag with actual image
+  </Step>
+  <Step title="Clean Srcset">
+    Removes responsive image parameters and extracts primary URL
+  </Step>
+</Steps>
+
+## Performance Optimizations
+
+### Lazy Loading Strategy
+
+Only the first image loads eagerly; all others use native lazy loading:
+
+```tsx CatalogGrid.tsx:45
+{...(idx === 0 ? {} : { loading: 'lazy' })}
+```
+
+### Query Caching
+
+The frontend uses React Query for intelligent data caching:
+
+- **Stale time**: 2 minutes
+- **Automatic refetching**: On window focus
+- **Background updates**: Seamless data refresh
+
+## User Experience Features
+
+<AccordionGroup>
+  <Accordion title="Hover Effects">
+    Cards scale up 5% and display neon border with play icon overlay
+  </Accordion>
+  
+  <Accordion title="Smooth Transitions">
+    All interactive elements use CSS transitions (300ms duration)
+  </Accordion>
+  
+  <Accordion title="Keyboard Navigation">
+    Pagination supports keyboard navigation for accessibility
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    Graceful fallbacks for missing images and failed extractions
+  </Accordion>
+</AccordionGroup>
+
+## API Integration
+
+The catalog connects to the backend via the `/api/listado` endpoint:
+
+```python app.py:79-141
+@app.route('/api/listado', methods=['GET'])
+def api_listado():
+    busqueda = request.args.get('busqueda')
+    seccion = request.args.get('seccion')
+    pagina = int(request.args.get('pagina', 1))
+    
+    # Handle search or section browsing
+    # Return catalog items with metadata
+```
+
+<Info>
+The endpoint supports both section browsing and search functionality through the same interface.
+</Info>
+
+## Best Practices
+
+When working with the catalog system:
+
+1. **Always handle loading states** - Show skeletons during data fetch
+2. **Implement error boundaries** - Catch and display extraction failures
+3. **Use type-based routing** - Direct users to correct player pages
+4. **Optimize images** - Lazy load all but first visible images
+5. **Cache responses** - Reduce server load with client-side caching
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Search" icon="magnifying-glass" href="/features/search">
+    Learn about search and deep search functionality
+  </Card>
+  <Card title="Video Player" icon="play" href="/features/video-player">
+    Explore the video player and streaming features
+  </Card>
+</CardGroup>

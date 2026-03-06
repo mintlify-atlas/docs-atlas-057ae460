@@ -1,0 +1,111 @@
+---
+title: 'Get Version'
+api: 'GET /api/version'
+description: 'Check the current API version and availability of updates'
+---
+
+## Endpoint
+
+```
+GET /api/version
+```
+
+## Description
+
+Returns the current API version and checks for available updates from the GitHub repository. This endpoint also provides changelog information when the API is up to date.
+
+## Parameters
+
+This endpoint does not require any parameters.
+
+## Response
+
+<ResponseField name="version" type="string" required>
+  The current version of the API (e.g., "1.4.8")
+</ResponseField>
+
+<ResponseField name="latest_version" type="string" required>
+  The latest available version from the GitHub repository
+</ResponseField>
+
+<ResponseField name="update_available" type="boolean" required>
+  Whether an update is available (true if latest_version > version)
+</ResponseField>
+
+<ResponseField name="changes" type="string | null">
+  Changelog text from GitHub (only included when the API is up to date)
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the remote version check fails (status still 200)
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:1234/api/version
+```
+
+```javascript JavaScript
+fetch('http://localhost:1234/api/version')
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get('http://localhost:1234/api/version')
+data = response.json()
+print(data)
+```
+</CodeGroup>
+
+## Example Response
+
+### When Update is Available
+
+```json
+{
+  "version": "1.4.8",
+  "latest_version": "1.5.0",
+  "update_available": true,
+  "changes": null
+}
+```
+
+### When Up to Date
+
+```json
+{
+  "version": "1.4.8",
+  "latest_version": "1.4.8",
+  "update_available": false,
+  "changes": "- Fixed bug in series extractor\n- Improved error handling\n- Added new network filters"
+}
+```
+
+### When Remote Check Fails
+
+```json
+{
+  "error": "No se pudo obtener la versión remota: Connection timeout",
+  "version": "1.4.8"
+}
+```
+
+## Version Comparison
+
+The endpoint uses semantic versioning comparison:
+- Versions are compared as `major.minor.patch`
+- Returns `update_available: true` only when the remote version is strictly greater
+- Handles version strings with different lengths (e.g., "1.4" vs "1.4.0")
+
+## GitHub Integration
+
+The endpoint fetches version information from:
+- **Version URL**: `https://raw.githubusercontent.com/UnfairAdventage/Web-Scrapping/refs/heads/main/CurrentVersion`
+- **Changes URL**: `https://raw.githubusercontent.com/UnfairAdventage/Web-Scrapping/refs/heads/main/Changes`
+
+Requests timeout after 5 seconds to prevent blocking.

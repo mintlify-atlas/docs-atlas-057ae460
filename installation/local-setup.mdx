@@ -1,0 +1,255 @@
+---
+title: 'Local Development Setup'
+description: 'Set up Web Scrapping Hub for local development with Python and Node.js'
+icon: 'laptop-code'
+---
+
+This guide walks you through setting up Web Scrapping Hub for local development. The application consists of a Flask backend (Python) and a React frontend (Vite).
+
+## Prerequisites
+
+<Warning>
+Make sure you have the following installed before proceeding:
+</Warning>
+
+- **Python 3.8 or higher** - Required for the Flask backend
+- **Node.js 18+** and npm - Required for the React frontend
+- **Git** - For cloning the repository
+
+<Note>
+We recommend using a Python virtual environment to avoid dependency conflicts.
+</Note>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the repository">
+    First, clone the Web Scrapping Hub repository to your local machine:
+
+    ```bash
+    git clone <repository-url>
+    cd Web-Scrapping
+    ```
+  </Step>
+
+  <Step title="Set up the backend">
+    Navigate to the backend directory and create a Python virtual environment:
+
+    ```bash
+    cd backend
+    python3 -m venv .venv
+    ```
+
+    Activate the virtual environment:
+
+    <CodeGroup>
+      ```bash Linux/macOS
+      source .venv/bin/activate
+      ```
+
+      ```bash Windows (PowerShell)
+      .venv\Scripts\Activate.ps1
+      ```
+
+      ```bash Windows (CMD)
+      .venv\Scripts\activate.bat
+      ```
+    </CodeGroup>
+
+    Install Python dependencies:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+    The backend uses the following key dependencies:
+    - **Flask** - Web framework
+    - **Flask-CORS** - Cross-Origin Resource Sharing support
+    - **BeautifulSoup4** - HTML parsing for web scraping
+    - **cloudscraper** - Cloudflare bypass for stable data extraction
+    - **adblockparser** - Ad blocking functionality
+    - **pytest** - Testing framework
+  </Step>
+
+  <Step title="Set up the frontend">
+    Navigate to the frontend project directory:
+
+    ```bash
+    cd ../frontend/project
+    ```
+
+    Install Node.js dependencies:
+
+    <CodeGroup>
+      ```bash npm
+      npm install
+      ```
+
+      ```bash yarn
+      yarn install
+      ```
+
+      ```bash pnpm
+      pnpm install
+      ```
+    </CodeGroup>
+
+    The frontend uses:
+    - **React 18.3** - UI framework
+    - **Vite 5.4** - Fast build tool and dev server
+    - **TailwindCSS** - Utility-first CSS framework
+    - **React Router DOM** - Client-side routing
+    - **TanStack Query** - Data fetching and caching
+    - **Lucide React** - Icon library
+  </Step>
+
+  <Step title="Start the development servers">
+    You'll need to run both the backend and frontend servers simultaneously.
+
+    **Terminal 1 - Backend:**
+    ```bash
+    # From project root
+    python -m backend.app
+    ```
+
+    The backend will start on **port 1234**.
+
+    **Terminal 2 - Frontend:**
+    ```bash
+    # From frontend/project directory
+    npm run dev
+    ```
+
+    The frontend development server will start on **port 5173** (or the next available port).
+  </Step>
+
+  <Step title="Access the application">
+    Open your browser and navigate to:
+
+    ```
+    http://localhost:5173
+    ```
+
+    The Vite dev server will proxy API requests to the Flask backend running on port 1234.
+  </Step>
+</Steps>
+
+## Project Structure
+
+```
+Web-Scrapping/
+├── backend/
+│   ├── app.py              # Main Flask application
+│   ├── config.py           # Configuration settings
+│   ├── main.py             # Entry point
+│   ├── requirements.txt    # Python dependencies
+│   ├── utils/              # Utility functions
+│   └── extractors/         # Modular web extractors
+├── frontend/
+│   └── project/
+│       ├── src/
+│       │   ├── hooks/      # React hooks organized by domain
+│       │   │   ├── api/    # API hooks (catalog, search)
+│       │   │   ├── ui/     # UI hooks (modal, pagination)
+│       │   │   └── utils/  # Utility hooks (debounce, localStorage)
+│       │   ├── components/ # React components
+│       │   └── pages/      # Page components
+│       ├── package.json    # Node.js dependencies
+│       └── dist/           # Production build output
+└── tests/                  # Unit and integration tests
+```
+
+## Development Workflow
+
+### Running Tests
+
+**Backend tests:**
+```bash
+cd backend
+pytest
+```
+
+**Frontend linting:**
+```bash
+cd frontend/project
+npm run lint
+```
+
+### Building for Production
+
+**Build the frontend:**
+```bash
+cd frontend/project
+npm run build
+```
+
+The optimized build will be output to `frontend/project/dist/`.
+
+### Preview Production Build
+
+```bash
+cd frontend/project
+npm run preview
+```
+
+## Environment Configuration
+
+The application configuration is managed in `backend/config.py`:
+
+- **APP_VERSION**: Current application version (1.4.8)
+- **BASE_URL**: Target scraping URL (sololatino.net)
+- **TARGET_URLS**: List of content sections and streaming services
+
+<Note>
+The frontend automatically detects the server IP. No additional environment variables are required for basic local development.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Port 1234 is already in use">
+    If port 1234 is already occupied, you can modify the port in `backend/app.py` or stop the conflicting process:
+
+    ```bash
+    # Find process using port 1234
+    lsof -i :1234
+
+    # Kill the process (replace PID with actual process ID)
+    kill -9 <PID>
+    ```
+  </Accordion>
+
+  <Accordion title="CORS errors in browser">
+    Make sure Flask-CORS is properly installed and configured. The backend should automatically allow requests from the Vite dev server.
+  </Accordion>
+
+  <Accordion title="Module not found errors (Python)">
+    Ensure your virtual environment is activated and all dependencies are installed:
+
+    ```bash
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    ```
+  </Accordion>
+
+  <Accordion title="npm install fails">
+    Try clearing the npm cache and reinstalling:
+
+    ```bash
+    npm cache clean --force
+    rm -rf node_modules package-lock.json
+    npm install
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/installation/docker-deployment">
+    Deploy using Docker and docker-compose
+  </Card>
+  <Card title="CasaOS Deployment" icon="server" href="/installation/casaos-deployment">
+    Deploy to CasaOS for home server setup
+  </Card>
+</CardGroup>

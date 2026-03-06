@@ -1,0 +1,559 @@
+---
+title: Custom Hooks
+description: Custom hooks structure and organization patterns
+---
+
+## Overview
+
+Custom hooks encapsulate reusable logic and state management. Hooks are organized into three categories: API hooks, UI hooks, and utility hooks.
+
+## Hook Organization
+
+Hooks are centralized through `src/hooks/index.ts`:
+
+```typescript
+// API Hooks - Hooks related to API calls
+export * from './api/api-client';
+export * from './api/catalog';
+export * from './api/search';
+export * from './api/series';
+export * from './api/movies';
+export * from './api/anime';
+
+// UI Hooks - Hooks for UI components
+export * from './ui/use-modal';
+export * from './ui/use-pagination';
+
+// Utils Hooks - Reusable utility hooks
+export * from './utils/use-debounce';
+export * from './utils/use-local-storage';
+```
+
+## API Hooks
+
+### API Client
+
+Base client for all API calls using fetch and React Query.
+
+**Location:** `src/hooks/api/api-client.ts`
+
+**Configuration:**
+```typescript
+export const API_BASE_URL = import.meta.env.DEV
+  ? `http://${window.location.hostname}:1234/api`
+  : '/api';
+```
+
+**Client Methods:**
+```typescript
+export const apiClient = {
+  async get<T>(endpoint: string, params?: Record<string, string | number>): Promise<T> {
+    let url = `${API_BASE_URL}${endpoint}`;
+    if (params) {
+      const search = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          search.append(key, String(value));
+        }
+      });
+      url += `?${search.toString()}`;
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} - ${response.statusText}`);
+    }
+    return response.json();
+  },
+  
+  buildUrl(endpoint: string, params?: Record<string, string | number>): string {
+    // Build URL with query parameters
+  }
+};
+```
+
+**Error Handler:**
+```typescript
+export const handleApiError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Error desconocido en la API';
+};
+```
+
+### Catalog Hooks
+
+Hooks for fetching catalog data and sections.
+
+**Location:** `src/hooks/api/catalog.ts`
+
+**useSections Hook:**
+```typescript
+export const useSections = () => {
+  return useQuery({
+    queryKey: ['sections'],
+    queryFn: catalogApi.getSections,
+    staleTime: 30 * 60 * 1000, // 30 minutes
+  });
+};
+```
+
+**useCatalog Hook:**
+```typescript
+export const useCatalog = (page: number, section?: string, search?: string) => {
+  return useQuery({
+    queryKey: ['catalog', page, section, search],
+    queryFn: () => catalogApi.getCatalog(page, section, search),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+```
+
+**API Functions:**
+```typescript
+export const catalogApi = {
+  async getSections(): Promise<Section[]> {
+    const data = await apiClient.get<{ secciones: string[] }>('/secciones');
+    return data.secciones.map((nombre: string) => ({ nombre }));
+  },
+
+  async getCatalog(
+    page: number = 1, 
+    section?: string, 
+    search?: string
+  ): Promise<CatalogResponse> {
+    const params: Record<string, string | number> = { pagina: page };
+    
+    if (section && section !== '') {
+      params.seccion = section;
+    }
+    
+    if (search && search !== '') {
+      params.busqueda = search;
+    }
+
+    const data = await apiClient.get<any>('/listado', params);
+    
+    // Map and normalize response data
+    return {
+      items,
+      pagination: {
+        currentPage: page,
+        totalPages: 10000,
+        totalItems: data.total_items || items.length * 5,
+        itemsPerPage: 20
+      }
+    };
+  }
+};
+```
+
+**Usage Example:**
+```typescript
+import { useCatalog, useSections } from '../hooks/api/catalog';
+
+function CatalogPage() {
+  const [page, setPage] = useState(1);
+  const [section, setSection] = useState('');
+  const [search, setSearch] = useState('');
+  
+  const { data: catalogData, isLoading } = useCatalog(page, section, search);
+  const { data: sections } = useSections();
+  
+  return (
+    // Component JSX
+  );
+}
+```
+
+## UI Hooks
+
+### useModal Hook
+
+Manage modal state and interactions.
+
+**Location:** `src/hooks/ui/use-modal.ts`
+
+**Basic Modal:**
+```typescript
+export function useModal(initialOpen: boolean = false): UseModalReturn {
+  const [isOpen, setIsOpen] = useState(initialOpen);
+
+  const open = useCallback(() => {
+    setIsOpen(true);
+  }, []);
+
+  const close = useCallback(() => {
+    setIsOpen(false);
+  }, []);
+
+  const toggle = useCallback(() => {
+    setIsOpen(prev => !prev);
+  }, []);
+
+  return { isOpen, open, close, toggle };
+}
+```
+
+**Modal with Data:**
+```typescript
+export function useModalWithData<T>(initialData?: T) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [data, setData] = useState<T | undefined>(initialData);
+
+  const open = useCallback((newData?: T) => {
+    if (newData !== undefined) {
+      setData(newData);
+    }
+    setIsOpen(true);
+  }, []);
+
+  const close = useCallback(() => {
+    setIsOpen(false);
+    setData(undefined);
+  }, []);
+
+  return { isOpen, data, open, close, toggle, setData };
+}
+```
+
+**Modal with Escape Key:**
+```typescript
+export function useModalWithEscape(initialOpen: boolean = false): UseModalReturn {
+  const modal = useModal(initialOpen);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && modal.isOpen) {
+        modal.close();
+      }
+    };
+
+    if (modal.isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [modal.isOpen, modal.close]);
+
+  return modal;
+}
+```
+
+**Confirmation Modal:**
+```typescript
+export function useConfirmModal() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [message, setMessage] = useState('');
+  const [onConfirm, setOnConfirm] = useState<(() => void) | null>(null);
+
+  const open = useCallback((msg: string, confirmCallback: () => void) => {
+    setMessage(msg);
+    setOnConfirm(() => confirmCallback);
+    setIsOpen(true);
+  }, []);
+
+  const confirm = useCallback(() => {
+    if (onConfirm) {
+      onConfirm();
+    }
+    close();
+  }, [onConfirm, close]);
+
+  return { isOpen, message, open, close, confirm };
+}
+```
+
+**Usage:**
+```typescript
+const modal = useModal();
+const dataModal = useModalWithData<UserData>();
+const confirmModal = useConfirmModal();
+
+// Basic modal
+<button onClick={modal.open}>Open</button>
+
+// Modal with data
+<button onClick={() => dataModal.open({ name: 'John' })}>Edit User</button>
+
+// Confirmation
+<button onClick={() => confirmModal.open('Are you sure?', handleDelete)}>Delete</button>
+```
+
+### usePagination Hook
+
+Manage pagination state and navigation.
+
+**Location:** `src/hooks/ui/use-pagination.ts`
+
+**Hook Implementation:**
+```typescript
+export function usePagination(initialState: Partial<PaginationState> = {}): UsePaginationReturn {
+  const [state, setState] = useState<PaginationState>({
+    currentPage: initialState.currentPage || 1,
+    totalPages: initialState.totalPages || 1,
+    totalItems: initialState.totalItems || 0,
+    itemsPerPage: initialState.itemsPerPage || 20
+  });
+
+  const goToPage = useCallback((page: number) => {
+    setState(prev => ({
+      ...prev,
+      currentPage: Math.max(1, Math.min(page, prev.totalPages))
+    }));
+  }, []);
+
+  const nextPage = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      currentPage: Math.min(prev.currentPage + 1, prev.totalPages)
+    }));
+  }, []);
+
+  const prevPage = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      currentPage: Math.max(prev.currentPage - 1, 1)
+    }));
+  }, []);
+
+  // Calculated values
+  const hasNextPage = useMemo(() => state.currentPage < state.totalPages, [state]);
+  const hasPrevPage = useMemo(() => state.currentPage > 1, [state]);
+  const startItem = useMemo(() => (state.currentPage - 1) * state.itemsPerPage + 1, [state]);
+  const endItem = useMemo(() => Math.min(state.currentPage * state.itemsPerPage, state.totalItems), [state]);
+
+  return {
+    currentPage: state.currentPage,
+    totalPages: state.totalPages,
+    goToPage,
+    nextPage,
+    prevPage,
+    hasNextPage,
+    hasPrevPage,
+    startItem,
+    endItem
+  };
+}
+```
+
+**Usage:**
+```typescript
+const pagination = usePagination({
+  currentPage: 1,
+  totalPages: 100,
+  totalItems: 2000,
+  itemsPerPage: 20
+});
+
+<Pagination
+  currentPage={pagination.currentPage}
+  totalPages={pagination.totalPages}
+  onPageChange={pagination.goToPage}
+/>
+```
+
+## Utility Hooks
+
+### useDebounce Hook
+
+Debounce value changes for search inputs and filters.
+
+**Location:** `src/hooks/utils/use-debounce.ts`
+
+**Value Debounce:**
+```typescript
+export function useDebounce<T>(value: T, delay: number = 500): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+```
+
+**Callback Debounce:**
+```typescript
+export function useDebouncedCallback<T extends (...args: any[]) => any>(
+  callback: T,
+  delay: number = 300
+): T {
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+
+  const debouncedCallback = ((...args: Parameters<T>) => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    const newTimer = setTimeout(() => {
+      callback(...args);
+    }, delay);
+
+    setDebounceTimer(newTimer);
+  }) as T;
+
+  return debouncedCallback;
+}
+```
+
+**Usage:**
+```typescript
+const [searchTerm, setSearchTerm] = useState('');
+const debouncedSearch = useDebounce(searchTerm, 400);
+
+// Triggers API call only after user stops typing for 400ms
+const { data } = useSearch(debouncedSearch);
+```
+
+### useLocalStorage Hook
+
+Persist state in localStorage with type safety.
+
+**Location:** `src/hooks/utils/use-local-storage.ts`
+
+**Basic Implementation:**
+```typescript
+export function useLocalStorage<T>(
+  key: string,
+  initialValue: T
+): [T, (value: T | ((val: T) => T)) => void, () => void] {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(`Error reading localStorage key "${key}":`, error);
+      return initialValue;
+    }
+  });
+
+  const setValue = useCallback((value: T | ((val: T) => T)) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.error(`Error setting localStorage key "${key}":`, error);
+    }
+  }, [key, storedValue]);
+
+  const removeValue = useCallback(() => {
+    try {
+      setStoredValue(initialValue);
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      console.error(`Error removing localStorage key "${key}":`, error);
+    }
+  }, [key, initialValue]);
+
+  return [storedValue, setValue, removeValue];
+}
+```
+
+**Boolean Helper:**
+```typescript
+export function useLocalStorageBoolean(
+  key: string,
+  initialValue: boolean = false
+): [boolean, (value: boolean) => void, () => void, () => void] {
+  const [value, setValue, removeValue] = useLocalStorage(key, initialValue);
+
+  const toggle = useCallback(() => {
+    setValue(!value);
+  }, [value, setValue]);
+
+  return [value, setValue, toggle, removeValue];
+}
+```
+
+**Array Helper:**
+```typescript
+export function useLocalStorageArray<T>(
+  key: string,
+  initialValue: T[] = []
+): [T[], (value: T[]) => void, (item: T) => void, (item: T) => void, () => void] {
+  const [array, setArray, removeValue] = useLocalStorage(key, initialValue);
+
+  const add = useCallback((item: T) => {
+    setArray(prev => [...prev, item]);
+  }, [setArray]);
+
+  const remove = useCallback((item: T) => {
+    setArray(prev => prev.filter(i => i !== item));
+  }, [setArray]);
+
+  return [array, setArray, add, remove, removeValue];
+}
+```
+
+**Usage:**
+```typescript
+// Basic
+const [theme, setTheme, removeTheme] = useLocalStorage('theme', 'dark');
+
+// Boolean
+const [isEnabled, setEnabled, toggle, remove] = useLocalStorageBoolean('feature-flag');
+
+// Array
+const [favorites, setFavorites, addFavorite, removeFavorite, clear] = 
+  useLocalStorageArray<string>('favorites', []);
+```
+
+## React Query Configuration
+
+Global React Query setup in `App.tsx`:
+
+```typescript
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 3,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      {/* App content */}
+    </QueryClientProvider>
+  );
+}
+```
+
+## Best Practices
+
+1. **Hook Naming**: Always prefix with `use` (e.g., `useModal`, `useDebounce`)
+2. **Memoization**: Use `useCallback` for functions, `useMemo` for computed values
+3. **Cleanup**: Always return cleanup functions in `useEffect`
+4. **Type Safety**: Define TypeScript interfaces for return types
+5. **Dependencies**: Carefully manage dependency arrays to prevent infinite loops
+6. **Error Handling**: Wrap API calls in try-catch blocks
+7. **Stale Time**: Configure appropriate stale times for cached data
+8. **Query Keys**: Use consistent, descriptive query keys for React Query
+
+## Creating New Hooks
+
+When creating a new hook:
+
+1. Choose the appropriate category (api/ui/utils)
+2. Create the hook file in the correct directory
+3. Export the hook from the category's index file
+4. Add TypeScript interfaces for parameters and return values
+5. Document the hook with JSDoc comments
+6. Add usage examples in comments
+7. Export from main `src/hooks/index.ts`

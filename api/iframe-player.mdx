@@ -1,0 +1,209 @@
+---
+title: 'Get iFrame Player'
+api: 'GET /api/iframe_player'
+description: 'Extract video player information from a content URL'
+---
+
+## Endpoint
+
+```
+GET /api/iframe_player
+```
+
+## Description
+
+Extracts the video player iframe URL from a given content page. This endpoint is used to get the actual streaming player for movies or series episodes. It scrapes the page and extracts the embedded player information.
+
+## Parameters
+
+<ParamField query="url" type="string" required>
+  Full URL of the content page (movie or episode) to extract the player from
+</ParamField>
+
+## Response
+
+<ResponseField name="player_url" type="string" required>
+  URL of the video player iframe
+</ResponseField>
+
+<ResponseField name="fuente" type="string" required>
+  Domain name of the video source (extracted from player_url)
+</ResponseField>
+
+<ResponseField name="formato" type="string" required>
+  Player format, typically "iframe"
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if player extraction fails
+</ResponseField>
+
+## Example Requests
+
+### Movie Player
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:1234/api/iframe_player?url=https://sololatino.net/peliculas/spider-man-no-way-home"
+```
+
+```javascript JavaScript
+const url = encodeURIComponent('https://sololatino.net/peliculas/spider-man-no-way-home');
+fetch(`http://localhost:1234/api/iframe_player?url=${url}`)
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+url = 'https://sololatino.net/peliculas/spider-man-no-way-home'
+response = requests.get(
+    'http://localhost:1234/api/iframe_player',
+    params={'url': url}
+)
+data = response.json()
+print(data)
+```
+</CodeGroup>
+
+### Episode Player
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:1234/api/iframe_player?url=https://sololatino.net/series/the-last-of-us/temporada-1/episodio-1"
+```
+
+```javascript JavaScript
+const url = encodeURIComponent('https://sololatino.net/series/the-last-of-us/temporada-1/episodio-1');
+fetch(`http://localhost:1234/api/iframe_player?url=${url}`)
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+url = 'https://sololatino.net/series/the-last-of-us/temporada-1/episodio-1'
+response = requests.get(
+    'http://localhost:1234/api/iframe_player',
+    params={'url': url}
+)
+data = response.json()
+print(data)
+```
+</CodeGroup>
+
+## Example Response
+
+### Success Response
+
+```json
+{
+  "player_url": "https://streamvid.net/embed/xyz123abc",
+  "fuente": "streamvid.net",
+  "formato": "iframe"
+}
+```
+
+## Error Responses
+
+### Missing URL Parameter
+
+```json
+{
+  "error": "Falta URL"
+}
+```
+Status: `400 Bad Request`
+
+### Player Not Found
+
+```json
+{
+  "error": "No se encontró el reproductor"
+}
+```
+Status: `404 Not Found`
+
+## How It Works
+
+1. **Fetches HTML**: Downloads the content page HTML
+2. **Cleans Ads**: Removes ad-related HTML elements for cleaner extraction
+3. **Extracts iframe**: Finds the `.dooplay_player iframe` element
+4. **Returns Info**: Extracts the iframe src URL and domain
+
+## Ad Blocking
+
+The endpoint uses an ad blocker to clean the HTML before extraction:
+- Removes known ad containers and scripts
+- Improves extraction reliability
+- Reduces processing overhead
+
+## Embedding the Player
+
+Use the returned `player_url` to embed the video player:
+
+```html
+<iframe 
+  src="{player_url}" 
+  width="100%" 
+  height="500" 
+  frameborder="0" 
+  allowfullscreen
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+></iframe>
+```
+
+## Common Video Sources
+
+The `fuente` field may contain domains such as:
+- streamvid.net
+- streamtape.com
+- doodstream.com
+- filemoon.sx
+- voe.sx
+- And other video hosting services
+
+<Note>
+Video sources may change over time as the source website updates its hosting providers.
+</Note>
+
+## Usage Flow
+
+<Steps>
+  <Step title="Get Content List">
+    Use `/api/listado` or `/api/deep-search` to find content
+  </Step>
+  
+  <Step title="Get Details">
+    For series: Use `/api/serie/{slug}` or `/api/anime/{slug}` to get episode URLs
+    
+    For movies: The `/api/pelicula/{slug}` endpoint already returns player info
+  </Step>
+  
+  <Step title="Extract Player">
+    Use `/api/iframe_player?url=...` with the episode or movie URL to get the video player
+  </Step>
+  
+  <Step title="Embed Player">
+    Use the returned `player_url` in an iframe to display the video
+  </Step>
+</Steps>
+
+## URL Encoding
+
+Make sure to properly URL-encode the `url` parameter, especially if it contains special characters:
+
+```javascript
+const contentUrl = 'https://sololatino.net/series/the-show';
+const encodedUrl = encodeURIComponent(contentUrl);
+const apiUrl = `http://localhost:1234/api/iframe_player?url=${encodedUrl}`;
+```
+
+## Limitations
+
+- Only extracts iframe-based players (not direct video URLs)
+- Requires the source page to have a `.dooplay_player iframe` element
+- May fail if the source website structure changes
+- Does not validate that the player URL is actually working

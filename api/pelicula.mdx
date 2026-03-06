@@ -1,0 +1,218 @@
+---
+title: 'Get Película'
+api: 'GET /api/pelicula/{slug}'
+description: 'Get movie details and video player information'
+---
+
+## Endpoint
+
+```
+GET /api/pelicula/{slug}
+```
+
+## Description
+
+Retrieve detailed information about a movie, including metadata and video player information. This endpoint automatically searches both the Películas (Movies) and Peliculas de Anime sections.
+
+## Path Parameters
+
+<ParamField path="slug" type="string" required>
+  The unique slug identifier for the movie (obtained from `/api/listado` or search results)
+</ParamField>
+
+## Response
+
+<ResponseField name="slug" type="string" required>
+  The movie slug identifier
+</ResponseField>
+
+<ResponseField name="player" type="object" required>
+  Video player information
+  
+  <Expandable title="Player properties">
+    <ResponseField name="player_url" type="string">
+      URL of the video player iframe
+    </ResponseField>
+    
+    <ResponseField name="source" type="string">
+      Domain name of the video source
+    </ResponseField>
+    
+    <ResponseField name="format" type="string">
+      Player format (typically "iframe")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="info" type="object" required>
+  Movie metadata and information
+  
+  <Expandable title="Info properties">
+    <ResponseField name="titulo" type="string">
+      Full title of the movie
+    </ResponseField>
+    
+    <ResponseField name="sinopsis" type="string">
+      Plot synopsis/description
+    </ResponseField>
+    
+    <ResponseField name="fecha_estreno" type="string">
+      Release date
+    </ResponseField>
+    
+    <ResponseField name="generos" type="array">
+      Array of genre strings
+    </ResponseField>
+    
+    <ResponseField name="imagen_poster" type="string">
+      URL of the poster image
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="encontrado_en" type="string" required>
+  Section where the movie was found: "peliculas" or "peliculas de anime"
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the movie is not found
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:1234/api/pelicula/spider-man-no-way-home
+```
+
+```javascript JavaScript
+fetch('http://localhost:1234/api/pelicula/spider-man-no-way-home')
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'http://localhost:1234/api/pelicula/spider-man-no-way-home'
+)
+data = response.json()
+print(data)
+```
+</CodeGroup>
+
+## Example Response
+
+### Success Response (Regular Movie)
+
+```json
+{
+  "slug": "spider-man-no-way-home",
+  "player": {
+    "player_url": "https://streamvid.net/embed/xyz123",
+    "source": "streamvid.net",
+    "format": "iframe"
+  },
+  "info": {
+    "titulo": "Spider-Man: No Way Home",
+    "sinopsis": "With Spider-Man's identity now revealed, Peter asks Doctor Strange for help. When a spell goes wrong, dangerous foes from other worlds start to appear, forcing Peter to discover what it truly means to be Spider-Man.",
+    "fecha_estreno": "2021-12-17",
+    "generos": ["Action", "Adventure", "Sci-Fi"],
+    "imagen_poster": "https://example.com/spiderman-poster.jpg"
+  },
+  "encontrado_en": "peliculas"
+}
+```
+
+### Success Response (Anime Movie)
+
+```json
+{
+  "slug": "demon-slayer-mugen-train",
+  "player": {
+    "player_url": "https://streamvid.net/embed/abc789",
+    "source": "streamvid.net",
+    "format": "iframe"
+  },
+  "info": {
+    "titulo": "Demon Slayer: Mugen Train",
+    "sinopsis": "Tanjiro and his friends board the Mugen Train to join Flame Hashira Kyojuro Rengoku in investigating a series of mysterious disappearances.",
+    "fecha_estreno": "2020-10-16",
+    "generos": ["Action", "Adventure", "Animation", "Fantasy"],
+    "imagen_poster": "https://example.com/demonslayer-poster.jpg"
+  },
+  "encontrado_en": "peliculas de anime"
+}
+```
+
+### Error Response
+
+```json
+{
+  "error": "Película no encontrada en películas ni en películas de anime"
+}
+```
+Status: `404 Not Found`
+
+## Automatic Section Detection
+
+The endpoint automatically searches for the movie in multiple sections:
+
+1. First searches in the **Películas** (Movies) section
+2. If not found, searches in the **Peliculas de Anime** (Anime Movies) section
+3. Returns 404 if not found in either section
+
+The `encontrado_en` field indicates which section contained the movie.
+
+## Player Information
+
+The `player` object contains all information needed to embed the video:
+
+- **player_url**: Direct iframe URL that can be embedded
+- **source**: Extracted domain for reference/logging
+- **format**: Always "iframe" in the current implementation
+
+### Embedding the Player
+
+```html
+<iframe 
+  src="{player_url}" 
+  width="100%" 
+  height="500" 
+  frameborder="0" 
+  allowfullscreen
+></iframe>
+```
+
+## Image Handling
+
+The endpoint handles various image loading strategies:
+- Extracts from lazy-loaded images
+- Falls back to `<noscript>` tags when needed
+- Uses OpenGraph meta tags as final fallback
+- Returns empty strings if no image is available
+
+## Genre Information
+
+Genres are returned as an array of strings extracted from the movie page. Common genres include:
+- Action
+- Adventure
+- Animation
+- Comedy
+- Crime
+- Drama
+- Fantasy
+- Horror
+- Mystery
+- Romance
+- Sci-Fi
+- Thriller
+
+## Debug Information
+
+The endpoint includes debug logging (visible in server logs) that shows:
+- Search URLs being checked
+- HTML download status
+- Player extraction results
+- Section where the movie was found

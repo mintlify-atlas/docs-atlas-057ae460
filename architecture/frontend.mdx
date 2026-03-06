@@ -1,0 +1,548 @@
+---
+title: 'Frontend Architecture'
+description: 'React frontend architecture, components, routing, state management, and design patterns'
+---
+
+## Overview
+
+The frontend is built with React 18, TypeScript, and modern web development tools. It follows a component-based architecture with hooks for state management, lazy loading for performance, and a clean separation between UI and business logic.
+
+## Project Structure
+
+```
+frontend/project/
+├── src/
+│   ├── main.tsx                 # Application entry point
+│   ├── App.tsx                  # Root component and routing
+│   ├── index.css                # Global styles
+│   ├── components/              # Reusable UI components
+│   │   ├── Layout.tsx           # Main layout with header/footer
+│   │   ├── CatalogGrid.tsx      # Content grid display
+│   │   ├── FilterBar.tsx        # Search and filter controls
+│   │   ├── Pagination.tsx       # Page navigation
+│   │   ├── LoadingSpinner.tsx   # Loading indicator
+│   │   └── ErrorBoundary.tsx    # Error handling wrapper
+│   ├── pages/                   # Route components
+│   │   ├── CatalogPage.tsx      # Catalog listing page
+│   │   ├── SeriesDetailPage.tsx # Series details and episodes
+│   │   ├── MovieDetailPage.tsx  # Movie details
+│   │   ├── AnimeDetailPage.tsx  # Anime details
+│   │   └── PlayerPage.tsx       # Video player page
+│   ├── hooks/                   # Custom React hooks
+│   │   ├── api/                 # API integration hooks
+│   │   │   ├── api-client.ts    # Base API client
+│   │   │   ├── catalog.ts       # Catalog data fetching
+│   │   │   ├── movies.ts        # Movie data fetching
+│   │   │   ├── series.ts        # Series data fetching
+│   │   │   ├── anime.ts         # Anime data fetching
+│   │   │   └── search.ts        # Search functionality
+│   │   ├── ui/                  # UI state hooks
+│   │   │   ├── use-modal.ts     # Modal state management
+│   │   │   └── use-pagination.ts # Pagination logic
+│   │   └── utils/               # Utility hooks
+│   │       ├── use-debounce.ts  # Debounced values
+│   │       └── use-local-storage.ts # LocalStorage sync
+│   └── types/
+│       └── index.ts             # TypeScript type definitions
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+└── tailwind.config.js
+```
+
+## Application Entry Point
+
+The application starts in `frontend/project/src/main.tsx:1-11`:
+
+```tsx frontend/project/src/main.tsx
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App.tsx';
+import './index.css';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+```
+
+## Root Component and Routing
+
+The `App` component configures routing and global providers (`frontend/project/src/App.tsx:1-50`):
+
+```tsx frontend/project/src/App.tsx
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
+
+// Lazy load pages for better performance
+const CatalogPage = lazy(() => import('./pages/CatalogPage'));
+const SeriesDetailPage = lazy(() => import('./pages/SeriesDetailPage'));
+const MovieDetailPage = lazy(() => import('./pages/MovieDetailPage'));
+const AnimeDetailPage = lazy(() => import('./pages/AnimeDetailPage'));
+const PlayerPage = lazy(() => import('./pages/PlayerPage'));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 3,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <Router>
+          <Layout>
+            <Suspense fallback={<div>Cargando...</div>}>
+              <Routes>
+                <Route path="/" element={<Navigate to="/page/1" replace />} />
+                <Route path="/page/:pageNumber" element={<CatalogPage section="" />} />
+                <Route path="/peliculas" element={<CatalogPage section="Películas" />} />
+                <Route path="/series" element={<CatalogPage section="Series" />} />
+                <Route path="/series/:slug" element={<SeriesDetailPage />} />
+                <Route path="/movie/:slug" element={<MovieDetailPage />} />
+                <Route path="/anime/:slug" element={<AnimeDetailPage />} />
+                <Route path="/ver/:tipo/:slug" element={<PlayerPage />} />
+              </Routes>
+            </Suspense>
+          </Layout>
+        </Router>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+}
+```
+
+<Info>
+**Key Features:**
+- Lazy loading for code splitting and faster initial load
+- TanStack Query for data fetching with caching
+- Error boundaries for graceful error handling
+- Clean URL routes (e.g., `/page/1` instead of `/?page=1`)
+</Info>
+
+## State Management
+
+### TanStack Query (React Query)
+
+The application uses TanStack Query for server state management:
+
+**Configuration:**
+- **Retry**: 3 attempts on failed requests
+- **Stale Time**: 5 minutes (data cached for 5 min before refetch)
+- **Refetch on Focus**: Disabled to prevent unnecessary requests
+
+### API Client
+
+The base API client (`frontend/project/src/hooks/api/api-client.ts:1-73`) handles all HTTP communication:
+
+```typescript frontend/project/src/hooks/api/api-client.ts
+export const API_BASE_URL = import.meta.env.DEV
+  ? `http://${window.location.hostname}:1234/api`
+  : '/api';
+
+export const apiClient = {
+  async get<T>(endpoint: string, params?: Record<string, string | number>): Promise<T> {
+    let url = `${API_BASE_URL}${endpoint}`;
+    if (params) {
+      const search = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          search.append(key, String(value));
+        }
+      });
+      url += `?${search.toString()}`;
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} - ${response.statusText}`);
+    }
+    return response.json();
+  },
+  
+  buildUrl(endpoint: string, params?: Record<string, string | number>): string {
+    // Constructs full URL with query parameters
+  }
+};
+```
+
+## Component Architecture
+
+### Layout Component
+
+The Layout component (`frontend/project/src/components/Layout.tsx:1-233`) provides the application shell:
+
+**Features:**
+- Responsive navigation with mobile menu
+- Version update notifications
+- Changelog display modal
+- Dynamic color scheme based on route
+- Footer with branding
+
+```tsx frontend/project/src/components/Layout.tsx
+const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [showUpdate, setShowUpdate] = React.useState(false);
+  const [updateInfo, setUpdateInfo] = React.useState<any>(null);
+  const location = useLocation();
+
+  // Dynamic color based on route
+  let appNameColor = 'text-electric-sky text-glow-electric-sky';
+  if (location.pathname.startsWith('/anime/')) {
+    appNameColor = 'text-magenta-pink text-glow-magenta-pink';
+  } else if (location.pathname.startsWith('/movie/')) {
+    appNameColor = 'text-fuchsia-pink text-glow-fuchsia-pink';
+  }
+
+  // Check for updates on mount
+  React.useEffect(() => {
+    fetch(VERSION_API)
+      .then(res => res.json())
+      .then(data => {
+        setUpdateInfo(data);
+        if (data.update_available) {
+          setShowUpdate(true);
+        }
+      });
+  }, []);
+```
+
+### CatalogGrid Component
+
+Displays content items in a responsive grid (`frontend/project/src/components/CatalogGrid.tsx:1-79`):
+
+```tsx frontend/project/src/components/CatalogGrid.tsx
+const CatalogGrid: React.FC<CatalogGridProps> = ({ items, loading = false }) => {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {Array.from({ length: 20 }).map((_, index) => (
+          <div key={index} className="animate-pulse">
+            <div className="bg-gray-700 rounded-lg aspect-[3/4] mb-2"></div>
+            <div className="h-4 bg-gray-700 rounded mb-2"></div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+      {items.map((item, idx) => (
+        <Link to={`/${item.type}/${item.slug}`} className="group block">
+          <div className="relative overflow-hidden rounded-lg">
+            <img
+              src={item.image}
+              alt={item.alt}
+              className="w-full aspect-[3/4] object-cover"
+              {...(idx === 0 ? {} : { loading: 'lazy' })}  // First image eager loaded
+            />
+            {/* Type badge and overlay */}
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+};
+```
+
+<Note>
+**Performance Optimization:**
+- First image loaded eagerly for better LCP (Largest Contentful Paint)
+- Remaining images lazy loaded to reduce initial bandwidth
+- Skeleton loading states for better perceived performance
+</Note>
+
+## Page Components
+
+### CatalogPage
+
+Manages catalog display with filtering and pagination (`frontend/project/src/pages/CatalogPage.tsx:1-162`):
+
+```tsx frontend/project/src/pages/CatalogPage.tsx
+const CatalogPage: React.FC<CatalogPageProps> = ({ section: sectionProp = '' }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { pageNumber } = useParams();
+
+  // Derive state from URL
+  const page = parseInt(pageNumber || searchParams.get('page') || '1', 10);
+  const section = sectionProp || searchParams.get('section') || '';
+  const search = searchParams.get('search') || '';
+
+  const { data, isLoading, error } = useCatalog(page, section, search);
+
+  // Optimized page change handler
+  const handlePageChange = useCallback((newPage: number) => {
+    navigate(`/page/${newPage}${search ? `?search=${encodeURIComponent(search)}` : ''}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [navigate, search]);
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <FilterBar
+        search={search}
+        onSearchChange={handleSearchChange}
+        section={section}
+        onSectionChange={handleSectionChange}
+      />
+      <CatalogGrid items={data?.items || []} loading={isLoading} />
+      <Pagination
+        currentPage={page}
+        totalPages={data?.pagination.totalPages}
+        onPageChange={handlePageChange}
+      />
+    </div>
+  );
+};
+```
+
+**Key Features:**
+- URL-driven state (no local state for filters)
+- Deep search support
+- Image preloading for first item
+- Optimized callbacks with `useCallback`
+
+## Custom Hooks
+
+### API Hooks
+
+Hooks are organized by domain in the `hooks/api/` directory:
+
+#### useCatalog Hook
+
+```typescript
+export function useCatalog(page: number, section: string, search: string) {
+  return useQuery({
+    queryKey: ['catalog', page, section, search],
+    queryFn: () => apiClient.get('/listado', { pagina: page, seccion: section, busqueda: search }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+```
+
+#### useMovieDetail Hook
+
+```typescript
+export function useMovieDetail(slug: string) {
+  return useQuery({
+    queryKey: ['movie', slug],
+    queryFn: () => apiClient.get(`/pelicula/${slug}`),
+  });
+}
+```
+
+### UI Hooks
+
+#### usePagination Hook
+
+```typescript hooks/ui/use-pagination.ts
+export function usePagination(totalPages: number, currentPage: number) {
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const maxVisible = 5;
+    
+    // Calculate visible page range
+    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+    
+    // Adjust start if end is at totalPages
+    if (end === totalPages) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+    
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    
+    return pages;
+  };
+  
+  return { pageNumbers: getPageNumbers() };
+}
+```
+
+### Utility Hooks
+
+#### useDebounce Hook
+
+```typescript hooks/utils/use-debounce.ts
+export function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+```
+
+## Routing Strategy
+
+The application uses React Router v7 with:
+
+### Clean URLs
+```
+/page/1              → Catalog page 1
+/page/2?search=abc   → Catalog page 2 with search
+/peliculas           → Movies section
+/series              → Series section
+/series/slug         → Series detail
+/movie/slug          → Movie detail
+/anime/slug          → Anime detail
+/ver/pelicula/slug   → Movie player
+/ver/serie/slug-1x1  → Episode player
+```
+
+### Navigation Patterns
+
+1. **Hash-free URLs**: No hash routing for better SEO
+2. **SPA fallback**: Backend serves `index.html` for all routes
+3. **Lazy loading**: Route components loaded on demand
+4. **Prefetching**: TanStack Query prefetches related data
+
+## Styling Architecture
+
+### TailwindCSS Configuration
+
+Custom design system with neon/space theme:
+
+```js tailwind.config.js
+theme: {
+  extend: {
+    colors: {
+      'space-black': '#0A0E27',
+      'dark-gray': '#1A1F3A',
+      'neon-cyan': '#00D9FF',
+      'electric-sky': '#00B5FF',
+      'magenta-pink': '#D93BDD',
+      'fuchsia-pink': '#FF3B9A',
+    },
+    fontFamily: {
+      orbitron: ['Orbitron', 'sans-serif'],
+      roboto: ['Roboto', 'sans-serif'],
+    },
+  },
+}
+```
+
+### Component Styling Patterns
+
+- **Utility-first**: TailwindCSS utilities for most styling
+- **Responsive**: Mobile-first responsive design
+- **Dark theme**: Space/neon aesthetic throughout
+- **Glow effects**: Custom text-glow and box-glow utilities
+
+## Performance Optimizations
+
+<CardGroup cols={2}>
+  <Card title="Code Splitting" icon="scissors">
+    Lazy loading with React.lazy() and Suspense
+  </Card>
+  <Card title="Image Optimization" icon="image">
+    Lazy loading images except first (LCP optimization)
+  </Card>
+  <Card title="Query Caching" icon="database">
+    5-minute stale time reduces redundant API calls
+  </Card>
+  <Card title="Debouncing" icon="clock">
+    Search inputs debounced to reduce API calls
+  </Card>
+  <Card title="Memoization" icon="memory">
+    useCallback and useMemo prevent unnecessary renders
+  </Card>
+  <Card title="Preloading" icon="bolt">
+    First catalog image preloaded for better LCP
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+### Error Boundary
+
+```tsx components/ErrorBoundary.tsx
+class ErrorBoundary extends React.Component<Props, State> {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-container">
+          <h1>Something went wrong</h1>
+          <button onClick={() => window.location.reload()}>Reload Page</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+```
+
+### API Error Handling
+
+```typescript
+const { data, error, isLoading } = useCatalog(page, section, search);
+
+if (error) {
+  return (
+    <div className="text-center">
+      <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+      <h2>Error al cargar el catálogo</h2>
+      <button onClick={() => refetch()}>Reintentar</button>
+    </div>
+  );
+}
+```
+
+## Build and Deployment
+
+### Vite Configuration
+
+Optimized build settings for production:
+
+```typescript vite.config.ts
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          query: ['@tanstack/react-query'],
+        },
+      },
+    },
+  },
+});
+```
+
+### Production Build
+
+```bash
+npm run build
+```
+
+Generates optimized static files in `dist/` directory.
+
+<Card title="Related Documentation" icon="book">
+  - [Backend Architecture](/architecture/backend) - API integration details
+  - [Component Guide](/development/frontend/components) - Detailed component usage
+</Card>

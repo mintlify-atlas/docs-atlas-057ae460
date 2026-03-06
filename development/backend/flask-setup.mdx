@@ -1,0 +1,298 @@
+---
+title: 'Flask Application Setup'
+description: 'Learn about the Flask application structure, configuration, and API endpoints in Web Scrapping Hub'
+icon: 'flask'
+---
+
+## Overview
+
+The Web Scrapping Hub backend is built with Flask, providing a RESTful API for scraping content from various sources. The application uses cloudscraper to bypass anti-bot protections and BeautifulSoup for HTML parsing.
+
+## Application Structure
+
+The Flask application is defined in `backend/app.py` and follows a modular structure:
+
+```
+backend/
+├── app.py              # Main Flask application
+├── config.py           # Configuration settings
+├── main.py            # Application entry point
+├── extractors/        # Content extraction modules
+├── utils/             # Utility functions
+└── tests/             # Test suite
+```
+
+## Configuration
+
+The application configuration is centralized in `config.py`:
+
+```python
+# Application version
+APP_VERSION = "1.4.8"
+GITHUB_VERSION_URL = "https://raw.githubusercontent.com/..."
+GITHUB_CHANGES_URL = "https://raw.githubusercontent.com/..."
+
+# Base URL for scraping
+BASE_URL = "https://sololatino.net"
+
+# Target URLs for different content sections
+TARGET_URLS = [
+    {"nombre": "Películas", "url": f"{BASE_URL}/peliculas"},
+    {"nombre": "Series", "url": f"{BASE_URL}/series"},
+    {"nombre": "Anime", "url": f"{BASE_URL}/animes"},
+    # ... more sections
+]
+```
+
+## Flask App Initialization
+
+The Flask app is initialized with CORS support and proper caching configuration:
+
+```python
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app)
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+app.config['ETAG_DISABLED'] = True
+```
+
+### Key Configuration Points
+
+- **CORS**: Enabled to allow cross-origin requests from the frontend
+- **Caching Disabled**: Prevents stale data by disabling ETags and file caching
+- **Debug Mode**: Enabled in development for detailed error messages
+
+## API Endpoints
+
+### Version Management
+
+**GET** `/api/version`
+
+Checks for application updates by comparing local version with remote version:
+
+```python
+@app.route('/api/version', methods=['GET'])
+def api_version():
+    try:
+        remote_version = _scraper.get(GITHUB_VERSION_URL, timeout=5).text.strip()
+        cmp = compare_versions(APP_VERSION, remote_version)
+        return jsonify({
+            "version": APP_VERSION,
+            "latest_version": remote_version,
+            "update_available": cmp < 0,
+            "changes": None if cmp != 0 else fetch_changes()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "version": APP_VERSION}), 200
+```
+
+### Content Discovery
+
+**GET** `/api/secciones`
+
+Returns available content sections:
+
+```python
+@app.route('/api/secciones', methods=['GET'])
+def api_secciones():
+    return jsonify({"secciones": SECCIONES_LIST})
+```
+
+**GET** `/api/listado?seccion=<section>&pagina=<page>&busqueda=<query>`
+
+Fetches content listings with optional search:
+
+```python
+@app.route('/api/listado', methods=['GET'])
+def api_listado():
+    busqueda = request.args.get('busqueda')
+    if busqueda:
+        # Search endpoint
+        url = f"https://sololatino.net/wp-json/dooplay/search/?keyword={query}&nonce=84428a202e"
+        data = fetch_json(url)
+        # Process search results...
+    else:
+        # Section listing
+        seccion = request.args.get('seccion')
+        pagina = int(request.args.get('pagina', 1))
+        # Fetch and parse HTML...
+```
+
+### Content Details
+
+**GET** `/api/pelicula/<slug>`
+
+Retrieves movie details and player information:
+
+```python
+@app.route('/api/pelicula/<slug>', methods=['GET'])
+def api_ver_pelicula(slug):
+    # Try movies section first
+    url = f"{BASE_URL}/peliculas/{slug}"
+    player = extraer_iframe_reproductor(url)
+    info = extraer_info_pelicula(fetch_html(url))
+    
+    # Fallback to anime movies if not found
+    if not player:
+        url = f"{BASE_URL}/genero/anime/{slug}"
+        # Retry extraction...
+    
+    return jsonify({"slug": slug, "player": player, "info": info})
+```
+
+**GET** `/api/serie/<slug>`
+
+Retrieves series/anime episodes organized by season:
+
+```python
+@app.route('/api/serie/<slug>', methods=['GET'])
+def api_ver_serie(slug):
+    result = extraer_episodios_serie(url)
+    episodios = result.get("episodios", [])
+    info = result.get("info", {})
+    
+    # Organize by season
+    temporadas = {}
+    for ep in episodios:
+        t = ep['temporada']
+        if t not in temporadas:
+            temporadas[t] = []
+        temporadas[t].append(ep)
+    
+    return jsonify({"slug": slug, "info": info, "temporadas": temporadas})
+```
+
+**GET** `/api/iframe_player?url=<url>`
+
+Extracts iframe player from a specific URL:
+
+```python
+@app.route('/api/iframe_player', methods=['GET'])
+def api_iframe_player():
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'error': 'Falta URL'}), 400
+    
+    player = extraer_iframe_reproductor(url)
+    if not player:
+        return jsonify({'error': 'No se encontró el reproductor'}), 404
+    
+    return jsonify(player)
+```
+
+### Deep Search
+
+**GET** `/api/deep-search?query=<query>`
+
+Performs a deep search across the site:
+
+```python
+@app.route('/api/deep-search', methods=['GET'])
+def api_deep_search():
+    query = request.args.get('query', '').strip()
+    url = f"https://sololatino.net/?s={quote_plus(query)}"
+    html = fetch_html(url)
+    resultados = extraer_listado(html)
+    return jsonify(resultados)
+```
+
+## Frontend Integration
+
+The Flask app serves the frontend build in production:
+
+```python
+FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), '../frontend/dist'))
+
+@app.route('/assets/<path:path>')
+def send_assets(path):
+    return send_from_directory(os.path.join(FRONTEND_DIST, 'assets'), path)
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    file_path = os.path.join(FRONTEND_DIST, path)
+    if path != "" and os.path.exists(file_path):
+        return send_from_directory(FRONTEND_DIST, path)
+    return send_from_directory(FRONTEND_DIST, 'index.html')
+```
+
+This enables client-side routing for the React frontend.
+
+## Utility Functions
+
+### Text Normalization
+
+```python
+def normaliza(texto):
+    """Normalize text for comparison by removing accents and converting to lowercase"""
+    return unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('ascii').lower()
+```
+
+### Version Comparison
+
+```python
+def compare_versions(local, remote):
+    """Compare semantic versions. Returns -1 if local < remote, 0 if equal, 1 if local > remote"""
+    def parse(v):
+        return [int(x) for x in v.strip().split('.')]
+    
+    l, r = parse(local), parse(remote)
+    for lv, rv in zip(l, r):
+        if lv < rv:
+            return -1
+        elif lv > rv:
+            return 1
+    
+    return 0 if len(l) == len(r) else (-1 if len(l) < len(r) else 1)
+```
+
+## Running the Application
+
+### Development Server
+
+```bash
+python backend/main.py
+# or
+python backend/app.py
+```
+
+The app runs on `http://0.0.0.0:1234` by default.
+
+### Production Deployment
+
+For production, use a WSGI server like Gunicorn:
+
+```bash
+gunicorn -w 4 -b 0.0.0.0:1234 backend.app:app
+```
+
+## Error Handling
+
+The API uses standard HTTP status codes:
+
+- `200 OK`: Successful request
+- `400 Bad Request`: Missing or invalid parameters
+- `404 Not Found`: Resource not found
+- `500 Internal Server Error`: Server-side error
+- `503 Service Unavailable`: External service unavailable
+
+Errors are returned in JSON format:
+
+```json
+{
+  "error": "Descripción del error"
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Extractors" icon="code" href="./extractors">
+    Learn how to create custom content extractors
+  </Card>
+  <Card title="Utilities" icon="wrench" href="./utilities">
+    Explore utility modules for HTTP requests and parsing
+  </Card>
+</CardGroup>

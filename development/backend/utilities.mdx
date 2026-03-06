@@ -1,0 +1,425 @@
+---
+title: 'Utility Modules'
+description: 'HTTP client, HTML parser, and ad blocking utilities for web scraping'
+icon: 'wrench'
+---
+
+## Overview
+
+The utilities directory contains helper modules that provide core functionality for HTTP requests, HTML parsing, and ad blocking. These utilities are used throughout the extractors and API endpoints.
+
+## HTTP Client
+
+The HTTP client (`utils/http_client.py`) uses cloudscraper to bypass Cloudflare and other anti-bot protections.
+
+### Module Structure
+
+```python
+import cloudscraper
+
+# Global scraper instance
+_scraper = cloudscraper.create_scraper()
+```
+
+Using a single global scraper instance improves performance by reusing connections and maintaining session state.
+
+### Fetching HTML
+
+```python
+def fetch_html(url):
+    """
+    Obtiene el HTML de una URL usando cloudscraper (supera Cloudflare y anti-bot).
+    Retorna el texto de la respuesta o None en caso de error.
+    """
+    try:
+        response = _scraper.get(url, timeout=30)
+        if response.status_code == 200:
+            return response.text
+        print(f"[ERROR] fetch_html: status {response.status_code} para {url}")
+    except Exception as e:
+        print(f"[ERROR] fetch_html: {e}")
+    return None
+```
+
+**Features:**
+- 30-second timeout to prevent hanging requests
+- Automatic Cloudflare bypass via cloudscraper
+- Error logging for debugging
+- Returns `None` on failure for easy error handling
+
+**Usage Example:**
+
+```python
+from backend.utils.http_client import fetch_html
+
+html = fetch_html('https://example.com')
+if html:
+    # Process HTML
+    soup = BeautifulSoup(html, 'html.parser')
+else:
+    # Handle error
+    print('Failed to fetch HTML')
+```
+
+### Fetching JSON
+
+```python
+def fetch_json(url):
+    """
+    Obtiene JSON de una URL usando cloudscraper.
+    Retorna el objeto JSON parseado o None en caso de error.
+    """
+    try:
+        response = _scraper.get(url, timeout=30)
+        if response.status_code == 200:
+            return response.json()
+        print(f"[ERROR] fetch_json: status {response.status_code} para {url}")
+    except Exception as e:
+        print(f"[ERROR] fetch_json: {e}")
+    return None
+```
+
+**Usage Example:**
+
+```python
+from backend.utils.http_client import fetch_json
+
+data = fetch_json('https://api.example.com/data')
+if data:
+    # Process JSON data
+    items = data.get('items', [])
+else:
+    # Handle error
+    print('Failed to fetch JSON')
+```
+
+### Accessing the Scraper Directly
+
+For advanced use cases, access the global `_scraper` instance:
+
+```python
+from backend.utils.http_client import _scraper
+
+# Make custom requests
+response = _scraper.get(url, headers={'User-Agent': 'Custom'}, timeout=10)
+response = _scraper.post(url, json=payload)
+```
+
+## Parser Utilities
+
+The parser module (`utils/parser.py`) provides helper functions for safe HTML parsing.
+
+```python
+def safe_text(element, default=''):
+    """Safely extract text from BeautifulSoup element"""
+    return element.text.strip() if element else default
+```
+
+**Usage Example:**
+
+```python
+from backend.utils.parser import safe_text
+from bs4 import BeautifulSoup
+
+soup = BeautifulSoup(html, 'html.parser')
+
+# Safe extraction - won't crash if element is missing
+title = safe_text(soup.select_one('h1'), default='Untitled')
+description = safe_text(soup.select_one('.description'))
+```
+
+### Why Use safe_text?
+
+Direct text extraction can fail if elements are missing:
+
+```python
+# Unsafe - crashes if h1 is missing
+title = soup.select_one('h1').text.strip()
+
+# Safe - returns default value
+title = safe_text(soup.select_one('h1'), default='Untitled')
+```
+
+## Ad Blocker
+
+The ad blocker (`utils/adblocker.py`) uses EasyList rules to remove ads and tracking scripts from HTML.
+
+### Loading Ad Block Rules
+
+```python
+from bs4 import BeautifulSoup
+import os
+import re
+from adblockparser import AdblockRules
+
+def load_easylist_rules(filepath):
+    """Load and parse EasyList rules from file"""
+    rules = []
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            # Ignore comments and exception rules
+            if not line or line.startswith(('!', '#', '[', '@@', '##', '#@#')):
+                continue
+            rules.append(line)
+    return rules
+
+# Load rules at module import
+EASYLIST_PATH = os.path.join(os.path.dirname(__file__), 'easylist.txt')
+EASYLIST_RULES = load_easylist_rules(EASYLIST_PATH)
+ADBLOCK_RULES = AdblockRules(EASYLIST_RULES)
+```
+
+### Cleaning HTML
+
+```python
+def clean_html_ads(html):
+    """Remove ads and tracking scripts from HTML"""
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # Remove blocked scripts
+    for script in soup.find_all('script', src=True):
+        src = script['src']
+        if ADBLOCK_RULES.should_block(src, {'script': True}):
+            script.decompose()
+    
+    # Remove blocked iframes
+    for iframe in soup.find_all('iframe', src=True):
+        src = iframe['src']
+        if ADBLOCK_RULES.should_block(src, {'subdocument': True}):
+            iframe.decompose()
+    
+    return str(soup)
+```
+
+**Usage Example:**
+
+```python
+from backend.utils.adblocker import clean_html_ads
+from backend.utils.http_client import fetch_html
+
+html = fetch_html('https://example.com')
+if html:
+    # Remove ads before parsing
+    clean_html = clean_html_ads(html)
+    soup = BeautifulSoup(clean_html, 'html.parser')
+```
+
+### When to Use Ad Blocking
+
+Use ad blocking when:
+- Extracting iframe players (to avoid ad iframes)
+- Scraping pages with heavy ad content
+- Improving parsing reliability
+
+Avoid ad blocking when:
+- Speed is critical (adds processing overhead)
+- The target site has minimal ads
+- You need the original HTML structure
+
+## Creating Custom Utilities
+
+To add new utilities:
+
+### 1. Create Utility Module
+
+```python
+# backend/utils/my_utility.py
+
+def process_data(data):
+    """
+    Process and transform data.
+    """
+    # Your processing logic
+    return transformed_data
+
+def validate_url(url):
+    """
+    Validate URL format.
+    """
+    import re
+    pattern = r'^https?://'
+    return bool(re.match(pattern, url))
+```
+
+### 2. Export from __init__.py
+
+```python
+# backend/utils/__init__.py
+from .http_client import fetch_html, fetch_json, _scraper
+from .parser import safe_text
+from .adblocker import clean_html_ads
+from .my_utility import process_data, validate_url
+
+__all__ = [
+    'fetch_html',
+    'fetch_json',
+    '_scraper',
+    'safe_text',
+    'clean_html_ads',
+    'process_data',
+    'validate_url'
+]
+```
+
+### 3. Use in Extractors
+
+```python
+from backend.utils.my_utility import validate_url, process_data
+
+def extraer_content(url):
+    if not validate_url(url):
+        return None
+    
+    html = fetch_html(url)
+    # ... extraction logic
+    
+    return process_data(raw_data)
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Reuse HTTP Client Instance">
+    Always use the global `_scraper` instance instead of creating new scrapers:
+    
+    ```python
+    # Good
+    from backend.utils.http_client import _scraper
+    response = _scraper.get(url)
+    
+    # Avoid
+    import cloudscraper
+    scraper = cloudscraper.create_scraper()
+    response = scraper.get(url)
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Timeouts Appropriately">
+    Set reasonable timeouts based on the operation:
+    
+    ```python
+    # Quick API checks
+    response = _scraper.get(url, timeout=5)
+    
+    # Full page scraping
+    response = _scraper.get(url, timeout=30)
+    
+    # Large downloads
+    response = _scraper.get(url, timeout=60)
+    ```
+  </Accordion>
+
+  <Accordion title="Log Errors with Context">
+    Include relevant context in error messages:
+    
+    ```python
+    try:
+        html = fetch_html(url)
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch {url}: {e}")
+        return None
+    ```
+  </Accordion>
+
+  <Accordion title="Use safe_text for Optional Fields">
+    Use `safe_text` for any field that might be missing:
+    
+    ```python
+    # Required field - fail fast
+    title = soup.select_one('h1').text.strip()
+    
+    # Optional field - use safe_text
+    subtitle = safe_text(soup.select_one('h2'))
+    description = safe_text(soup.select_one('.desc'), default='No description')
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Common Patterns
+
+### Retry Failed Requests
+
+```python
+import time
+
+def fetch_with_retry(url, max_retries=3):
+    for attempt in range(max_retries):
+        html = fetch_html(url)
+        if html:
+            return html
+        if attempt < max_retries - 1:
+            time.sleep(2 ** attempt)  # Exponential backoff
+    return None
+```
+
+### Extract with Fallbacks
+
+```python
+def extract_image(soup):
+    img = soup.select_one('img.poster')
+    if not img:
+        return ''
+    
+    # Try multiple sources
+    url = (img.get('data-src') or 
+           img.get('data-lazy-src') or 
+           img.get('src', ''))
+    
+    # Fallback to meta tags
+    if not url or 'data:image' in url:
+        og_image = soup.find('meta', property='og:image')
+        if og_image:
+            url = og_image.get('content', '')
+    
+    return url
+```
+
+### Validate and Clean Data
+
+```python
+def clean_title(title):
+    """Remove extra whitespace and special characters"""
+    import re
+    title = re.sub(r'\s+', ' ', title).strip()
+    title = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', title)
+    return title
+
+def validate_year(year_str):
+    """Extract and validate year from string"""
+    import re
+    match = re.search(r'\b(19|20)\d{2}\b', year_str)
+    if match:
+        year = int(match.group())
+        if 1900 <= year <= 2100:
+            return year
+    return None
+```
+
+## Performance Tips
+
+<CardGroup cols={2}>
+  <Card title="Connection Pooling" icon="network-wired">
+    The global `_scraper` instance automatically manages connection pooling for better performance.
+  </Card>
+  <Card title="Timeout Configuration" icon="clock">
+    Use appropriate timeouts to prevent slow requests from blocking the server.
+  </Card>
+  <Card title="Selective Ad Blocking" icon="shield">
+    Only use ad blocking when necessary, as it adds processing overhead.
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation">
+    Return `None` or default values instead of raising exceptions for better reliability.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Flask Setup" icon="flask" href="./flask-setup">
+    Learn about Flask application structure
+  </Card>
+  <Card title="Extractors" icon="code" href="./extractors">
+    Create custom content extractors
+  </Card>
+</CardGroup>

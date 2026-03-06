@@ -1,0 +1,453 @@
+---
+title: 'Content Extractors'
+description: 'Learn how to create custom extractors for scraping different types of content'
+icon: 'code'
+---
+
+## Overview
+
+Extractors are specialized modules that parse HTML content and extract structured data. Web Scrapping Hub uses a modular extractor pattern that makes it easy to add support for new content types.
+
+## Extractor Architecture
+
+All extractors follow a consistent pattern:
+
+1. **Fetch HTML**: Use `http_client.fetch_html()` to retrieve the page
+2. **Parse with BeautifulSoup**: Create a soup object for DOM traversal
+3. **Extract Data**: Use CSS selectors to find and extract content
+4. **Return Structured Data**: Return consistent JSON-like dictionaries
+
+## Available Extractors
+
+### Generic Extractor
+
+The generic extractor (`extractors/generic_extractor.py`) handles content listings and movie information.
+
+#### Listing Extraction
+
+```python
+from bs4 import BeautifulSoup
+
+def extraer_listado(html):
+    """
+    Extract content listings from HTML.
+    Returns a list of items with title, image, metadata, etc.
+    """
+    soup = BeautifulSoup(html, 'html.parser')
+    articulos = soup.select('article.item')
+    datos = []
+    
+    for articulo in articulos:
+        try:
+            poster = articulo.select_one('.poster')
+            enlace = articulo.select_one('a')['href']
+            id_post = articulo.get('data-id', 'N/A')
+            slug = enlace.rstrip('/').split('/')[-1]
+            
+            # Extract title
+            titulo = poster.select_one('h3').text.strip() if poster.select_one('h3') else ''
+            
+            # Handle lazy-loaded images
+            img_tag = poster.select_one('img')
+            imagen = ''
+            if img_tag:
+                # Priority: data-srcset > data-src > data-lazy-src > src
+                imagen = (img_tag.get('data-srcset') or 
+                         img_tag.get('data-src') or 
+                         img_tag.get('data-lazy-src') or 
+                         img_tag.get('src', ''))
+                
+                # Fallback to noscript if placeholder
+                if 'data:image' in imagen:
+                    noscript = articulo.select_one('noscript img')
+                    if noscript:
+                        imagen = noscript.get('src', imagen)
+                
+                # Clean srcset
+                if ',' in imagen:
+                    imagen = imagen.split(',')[0].split(' ')[0]
+            
+            # Extract metadata
+            alt = img_tag.get('alt', '') if img_tag else ''
+            year = poster.select_one('.data p').text.strip() if poster.select_one('.data p') else ''
+            generos = poster.select_one('.data span').text.strip() if poster.select_one('.data span') else ''
+            idioma = 'Latino' if poster.select_one('.audio .latino') else 'Otro'
+            tipo = 'pelicula' if 'movies' in articulo.get('class', []) else 'serie' if 'tvshows' in articulo.get('class', []) else 'Otro'
+            
+            datos.append({
+                "id": id_post,
+                "slug": slug,
+                "titulo": titulo,
+                "alt": alt,
+                "imagen": imagen,
+                "year": year,
+                "generos": generos,
+                "idioma": idioma,
+                "tipo": tipo,
+                "url": enlace
+            })
+        except Exception as e:
+            print(f"[ERROR] Falló al parsear un artículo: {e}")
+    
+    return datos
+```
+
+#### Movie Information Extraction
+
+```python
+def extraer_info_pelicula(html):
+    """
+    Extract detailed movie information from HTML.
+    Returns title, synopsis, release date, genres, and poster image.
+    """
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # Extract title
+    titulo = soup.select_one('div.data h1')
+    titulo = titulo.text.strip() if titulo else 'No encontrado'
+    
+    # Extract synopsis
+    sinopsis_div = soup.find('div', itemprop='description')
+    sinopsis = sinopsis_div.find('p').text.strip() if sinopsis_div and sinopsis_div.find('p') else ''
+    
+    # Extract release date
+    fecha_estreno = soup.find('span', itemprop='dateCreated')
+    fecha_estreno = fecha_estreno.text.strip() if fecha_estreno else ''
+    
+    # Extract genres
+    generos_div = soup.find('div', class_='sgeneros')
+    generos = [a.text.strip() for a in generos_div.find_all('a')] if generos_div else []
+    
+    # Extract poster image
+    poster_img = soup.select_one('div.poster img')
+    imagen_poster = ''
+    if poster_img:
+        imagen_poster = (poster_img.get('data-src') or 
+                        poster_img.get('data-lazy-src') or 
+                        poster_img.get('src', ''))
+        
+        # Fallback to noscript if placeholder
+        if 'data:image' in imagen_poster:
+            noscript = soup.select_one('div.poster noscript img')
+            if noscript:
+                imagen_poster = noscript.get('src', imagen_poster)
+    
+    # Fallback to Open Graph metadata
+    if not imagen_poster or 'data:image' in imagen_poster:
+        og_image = soup.find('meta', property='og:image')
+        if og_image:
+            imagen_poster = og_image.get('content', imagen_poster)
+        else:
+            twitter_image = soup.find('meta', name='twitter:image')
+            if twitter_image:
+                imagen_poster = twitter_image.get('content', imagen_poster)
+    
+    return {
+        'titulo': titulo,
+        'sinopsis': sinopsis,
+        'fecha_estreno': fecha_estreno,
+        'generos': generos,
+        'imagen_poster': imagen_poster
+    }
+```
+
+### Series Extractor
+
+The series extractor (`extractors/serie_extractor.py`) handles TV shows and anime series with multiple episodes.
+
+```python
+from bs4 import BeautifulSoup
+from backend.utils.http_client import fetch_html
+
+def extraer_episodios_serie(url):
+    """
+    Extract series information and all episodes organized by season.
+    Returns info dict and list of episodes.
+    """
+    html = fetch_html(url)
+    if not html:
+        print(f"[ERROR] No se pudo acceder a la URL: {url}")
+        return {"info": {}, "episodios": []}
+    
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # Extract series info
+    sinopsis = soup.select_one('div[itemprop="description"].wp-content')
+    sinopsis = sinopsis.text.strip() if sinopsis else ''
+    
+    titulo = ''
+    titulo_data = soup.select_one('div.data h1')
+    if titulo_data:
+        titulo = titulo_data.text.strip()
+    else:
+        titulo_alt = soup.select_one('h1.entry-title')
+        titulo = titulo_alt.text.strip() if titulo_alt else ''
+    
+    generos_div = soup.find('div', class_='sgeneros')
+    generos = [a.text.strip() for a in generos_div.find_all('a')] if generos_div else []
+    
+    # Extract poster (with lazy-load handling)
+    poster_img = soup.select_one('div.poster img')
+    imagen_poster = ''
+    if poster_img:
+        imagen_poster = (poster_img.get('data-src') or 
+                        poster_img.get('data-lazy-src') or 
+                        poster_img.get('src', ''))
+        
+        if 'data:image' in imagen_poster:
+            noscript = soup.select_one('div.poster noscript img')
+            if noscript:
+                imagen_poster = noscript.get('src', imagen_poster)
+    
+    # Fallback to OG tags
+    if not imagen_poster or 'data:image' in imagen_poster:
+        og_image = soup.find('meta', property='og:image')
+        if og_image:
+            imagen_poster = og_image.get('content', imagen_poster)
+    
+    # Extract episodes by season
+    temporadas_divs = soup.select('#seasons .se-c')
+    episodios_data = []
+    fechas_episodios = []
+    
+    for temporada_div in temporadas_divs:
+        num_temporada = int(temporada_div.get('data-season', 0))
+        episodios = temporada_div.select('li')
+        
+        for episodio in episodios:
+            try:
+                enlace_episodio = episodio.select_one('a')['href']
+                titulo_ep = episodio.select_one('.epst').text.strip() if episodio.select_one('.epst') else ''
+                numerando = episodio.select_one('.numerando').text.strip() if episodio.select_one('.numerando') else ''
+                numero_ep = int(numerando.split('-')[-1].strip()) if numerando else 0
+                fecha = episodio.select_one('.date').text.strip() if episodio.select_one('.date') else ''
+                
+                if fecha:
+                    fechas_episodios.append(fecha)
+                
+                # Extract episode thumbnail
+                img_ep = episodio.select_one('img')
+                imagen = ''
+                if img_ep:
+                    imagen = (img_ep.get('data-src') or 
+                             img_ep.get('data-lazy-src') or 
+                             img_ep.get('src', ''))
+                    if 'data:image' in imagen and img_ep.get('data-src'):
+                        imagen = img_ep.get('data-src')
+                
+                episodios_data.append({
+                    "temporada": num_temporada,
+                    "episodio": numero_ep,
+                    "titulo": titulo_ep,
+                    "fecha": fecha,
+                    "imagen": imagen,
+                    "url": enlace_episodio
+                })
+            except Exception as e:
+                print(f"⚠️ Error en episodio: {e}")
+    
+    # Use first episode date as series premiere date
+    fecha_estreno = fechas_episodios[0] if fechas_episodios else ''
+    
+    info = {
+        "titulo": titulo,
+        "sinopsis": sinopsis,
+        "generos": generos,
+        "imagen_poster": imagen_poster,
+        "fecha_estreno": fecha_estreno
+    }
+    
+    return {"info": info, "episodios": episodios_data}
+```
+
+### Iframe Extractor
+
+The iframe extractor (`extractors/iframe_extractor.py`) finds video player iframes in content pages.
+
+```python
+from bs4 import BeautifulSoup
+from backend.utils.adblocker import clean_html_ads
+from backend.utils.http_client import fetch_html
+
+def extraer_iframe_reproductor(url):
+    """
+    Extract iframe player URL from a content page.
+    Returns player info or None if not found.
+    """
+    html = fetch_html(url)
+    if not html:
+        print(f"❌ Error al acceder a: {url}")
+        return None
+    
+    # Clean ads before parsing
+    html_limpio = clean_html_ads(html)
+    soup = BeautifulSoup(html_limpio, 'html.parser')
+    
+    # Find player iframe
+    iframe = soup.select_one('.dooplay_player iframe')
+    if iframe and iframe.get('src'):
+        url_reproductor = iframe['src']
+        return {
+            "player_url": url_reproductor,
+            "fuente": url_reproductor.split('/')[2],  # domain
+            "formato": "iframe"
+        }
+    else:
+        print("⚠️ No se encontró iframe de reproducción.")
+        return None
+```
+
+## Creating Custom Extractors
+
+To create a new extractor, follow this pattern:
+
+### 1. Create Extractor File
+
+Create a new file in `backend/extractors/`:
+
+```python
+# backend/extractors/my_custom_extractor.py
+from bs4 import BeautifulSoup
+from backend.utils.http_client import fetch_html
+
+def extraer_my_content(url):
+    """
+    Extract custom content from URL.
+    """
+    html = fetch_html(url)
+    if not html:
+        return None
+    
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # Your extraction logic here
+    data = {
+        'title': soup.select_one('h1').text.strip(),
+        'description': soup.select_one('.description').text.strip(),
+        # ... more fields
+    }
+    
+    return data
+```
+
+### 2. Import in App
+
+Add your extractor to `app.py`:
+
+```python
+from backend.extractors.my_custom_extractor import extraer_my_content
+
+@app.route('/api/my-content/<id>', methods=['GET'])
+def api_my_content(id):
+    url = f"https://example.com/content/{id}"
+    data = extraer_my_content(url)
+    if not data:
+        return jsonify({'error': 'Content not found'}), 404
+    return jsonify(data)
+```
+
+### 3. Handle Edge Cases
+
+Always handle common issues:
+
+- **Lazy-loaded images**: Check multiple attributes (data-src, data-lazy-src, src)
+- **Missing elements**: Use conditional checks before accessing text/attributes
+- **Encoding issues**: BeautifulSoup handles this automatically with 'html.parser'
+- **Exceptions**: Wrap extraction logic in try-except blocks
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use CSS Selectors Efficiently">
+    Prefer specific CSS selectors over complex traversal:
+    
+    ```python
+    # Good
+    title = soup.select_one('div.content h1.title')
+    
+    # Avoid
+    content = soup.find('div', class_='content')
+    title = content.find('h1', class_='title')
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Lazy Loading">
+    Always check for lazy-loaded images:
+    
+    ```python
+    img_tag = soup.select_one('img')
+    if img_tag:
+        imagen = (img_tag.get('data-src') or 
+                 img_tag.get('data-lazy-src') or 
+                 img_tag.get('src', ''))
+        
+        # Fallback to noscript
+        if 'data:image' in imagen:
+            noscript = soup.select_one('noscript img')
+            if noscript:
+                imagen = noscript.get('src', imagen)
+    ```
+  </Accordion>
+
+  <Accordion title="Return Consistent Data Structures">
+    Always return dictionaries with consistent keys:
+    
+    ```python
+    # Good
+    return {
+        "title": title or "",
+        "description": description or "",
+        "items": items or []
+    }
+    
+    # Avoid returning None or incomplete data
+    ```
+  </Accordion>
+
+  <Accordion title="Log Errors Appropriately">
+    Use descriptive error messages:
+    
+    ```python
+    try:
+        # extraction logic
+    except AttributeError as e:
+        print(f"[ERROR] Missing expected element: {e}")
+    except Exception as e:
+        print(f"[ERROR] Unexpected error in extractor: {e}")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Testing Extractors
+
+Test your extractors with real HTML:
+
+```python
+# backend/tests/test_my_extractor.py
+import unittest
+from backend.extractors.my_custom_extractor import extraer_my_content
+from backend.utils.http_client import fetch_html
+
+class TestMyExtractor(unittest.TestCase):
+    def test_extraction(self):
+        url = "https://example.com/content/123"
+        result = extraer_my_content(url)
+        
+        self.assertIsNotNone(result)
+        self.assertIn('title', result)
+        self.assertTrue(len(result['title']) > 0)
+
+if __name__ == '__main__':
+    unittest.main()
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Flask Setup" icon="flask" href="./flask-setup">
+    Learn about Flask application structure
+  </Card>
+  <Card title="Utilities" icon="wrench" href="./utilities">
+    Explore HTTP client and parsing utilities
+  </Card>
+</CardGroup>

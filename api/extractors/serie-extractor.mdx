@@ -1,0 +1,323 @@
+---
+title: 'Serie Extractor'
+description: 'Extract series information and episode listings from HTML pages'
+---
+
+## Overview
+
+The Serie Extractor module specializes in extracting structured data from TV series pages, including series metadata and complete episode listings organized by seasons.
+
+## Functions
+
+### extraer_episodios_serie
+
+Extracts complete information about a series including metadata and all episodes across all seasons.
+
+#### Signature
+
+```python
+def extraer_episodios_serie(url: str) -> dict
+```
+
+#### Parameters
+
+<ParamField path="url" type="string" required>
+  The URL of the series page to extract data from
+</ParamField>
+
+#### Returns
+
+Returns a dictionary with two main keys:
+
+<ResponseField name="info" type="object">
+  Series metadata containing:
+  
+  <Expandable title="info fields">
+    <ResponseField name="titulo" type="string">
+      The series title
+    </ResponseField>
+    
+    <ResponseField name="sinopsis" type="string">
+      The series synopsis/description
+    </ResponseField>
+    
+    <ResponseField name="generos" type="list">
+      List of genre names
+    </ResponseField>
+    
+    <ResponseField name="imagen_poster" type="string">
+      The series poster image URL
+    </ResponseField>
+    
+    <ResponseField name="fecha_estreno" type="string">
+      The premiere date (extracted from the first episode)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="episodios" type="array">
+  List of episode objects, each containing:
+  
+  <Expandable title="episode fields">
+    <ResponseField name="temporada" type="integer">
+      The season number
+    </ResponseField>
+    
+    <ResponseField name="episodio" type="integer">
+      The episode number within the season
+    </ResponseField>
+    
+    <ResponseField name="titulo" type="string">
+      The episode title
+    </ResponseField>
+    
+    <ResponseField name="fecha" type="string">
+      The episode air date
+    </ResponseField>
+    
+    <ResponseField name="imagen" type="string">
+      The episode thumbnail image URL
+    </ResponseField>
+    
+    <ResponseField name="url" type="string">
+      The URL to watch the episode
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```python
+from backend.extractors.serie_extractor import extraer_episodios_serie
+
+resultado = extraer_episodios_serie("https://example.com/serie/breaking-bad/")
+
+print(f"Serie: {resultado['info']['titulo']}")
+print(f"Géneros: {', '.join(resultado['info']['generos'])}")
+print(f"Total de episodios: {len(resultado['episodios'])}")
+
+for ep in resultado['episodios'][:5]:
+    print(f"S{ep['temporada']:02d}E{ep['episodio']:02d} - {ep['titulo']}")
+
+# Output:
+# Serie: Breaking Bad
+# Géneros: Crime, Drama, Thriller
+# Total de episodios: 62
+# S01E01 - Pilot
+# S01E02 - Cat's in the Bag...
+# S01E03 - ...And the Bag's in the River
+# S01E04 - Cancer Man
+# S01E05 - Gray Matter
+```
+
+#### Full Example Response
+
+```json
+{
+  "info": {
+    "titulo": "Breaking Bad",
+    "sinopsis": "A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine in order to secure his family's future.",
+    "generos": ["Crime", "Drama", "Thriller"],
+    "imagen_poster": "https://example.com/breaking-bad-poster.jpg",
+    "fecha_estreno": "January 20, 2008"
+  },
+  "episodios": [
+    {
+      "temporada": 1,
+      "episodio": 1,
+      "titulo": "Pilot",
+      "fecha": "January 20, 2008",
+      "imagen": "https://example.com/ep1.jpg",
+      "url": "https://example.com/serie/breaking-bad/1x1/"
+    },
+    {
+      "temporada": 1,
+      "episodio": 2,
+      "titulo": "Cat's in the Bag...",
+      "fecha": "January 27, 2008",
+      "imagen": "https://example.com/ep2.jpg",
+      "url": "https://example.com/serie/breaking-bad/1x2/"
+    }
+  ]
+}
+```
+
+## Implementation Details
+
+### HTTP Fetching
+
+The function internally uses `fetch_html()` to retrieve the page content:
+
+```python
+from backend.utils.http_client import fetch_html
+
+html = fetch_html(url)
+if not html:
+    return {"info": {}, "episodios": []}
+```
+
+### Title Extraction Strategy
+
+The function uses a robust fallback mechanism for title extraction:
+
+1. First attempts: `div.data h1`
+2. Fallback: `h1.entry-title`
+3. Default: Empty string
+
+```python
+titulo = ''
+titulo_data = soup.select_one('div.data h1')
+if titulo_data:
+    titulo = titulo_data.text.strip()
+else:
+    titulo_alt = soup.select_one('h1.entry-title')
+    titulo = titulo_alt.text.strip() if titulo_alt else ''
+```
+
+### Image Handling
+
+Multi-level fallback system for poster images:
+
+1. Lazy-loading attributes: `data-src`, `data-lazy-src`, `src`
+2. Noscript fallback for placeholder images
+3. Open Graph meta tags (`og:image`)
+
+```python
+if poster_img:
+    imagen_poster = poster_img.get('data-src') or poster_img.get('data-lazy-src') or poster_img.get('src', '')
+    
+    if 'data:image' in imagen_poster:
+        noscript = soup.select_one('div.poster noscript img')
+        if noscript:
+            imagen_poster = noscript.get('src', imagen_poster)
+
+if not imagen_poster or 'data:image' in imagen_poster:
+    og_image = soup.find('meta', property='og:image')
+    if og_image:
+        imagen_poster = og_image.get('content', imagen_poster)
+```
+
+### Season and Episode Parsing
+
+The function iterates through season containers and extracts episode data:
+
+```python
+temporadas_divs = soup.select('#seasons .se-c')
+for temporada_div in temporadas_divs:
+    num_temporada = int(temporada_div.get('data-season', 0))
+    episodios = temporada_div.select('li')
+    for episodio in episodios:
+        # Extract episode data...
+```
+
+### Date Extraction
+
+The premiere date is intelligently extracted from the first episode's air date:
+
+```python
+fechas_episodios = []
+for episodio in episodios:
+    fecha = episodio.select_one('.date').text.strip() if episodio.select_one('.date') else ''
+    if fecha:
+        fechas_episodios.append(fecha)
+
+fecha_estreno = fechas_episodios[0] if fechas_episodios else ''
+```
+
+## Use Cases
+
+### Building a Series Database
+
+```python
+from backend.extractors.serie_extractor import extraer_episodios_serie
+import json
+
+series_urls = [
+    "https://example.com/serie/breaking-bad/",
+    "https://example.com/serie/game-of-thrones/",
+    "https://example.com/serie/stranger-things/"
+]
+
+for url in series_urls:
+    data = extraer_episodios_serie(url)
+    if data['episodios']:
+        filename = data['info']['titulo'].replace(' ', '_').lower() + '.json'
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        print(f"Saved {len(data['episodios'])} episodes for {data['info']['titulo']}")
+```
+
+### Finding Latest Episodes
+
+```python
+from backend.extractors.serie_extractor import extraer_episodios_serie
+from datetime import datetime
+
+data = extraer_episodios_serie("https://example.com/serie/the-walking-dead/")
+
+# Get the latest season
+latest_season = max(ep['temporada'] for ep in data['episodios'])
+latest_episodes = [ep for ep in data['episodios'] if ep['temporada'] == latest_season]
+
+print(f"Season {latest_season} has {len(latest_episodes)} episodes:")
+for ep in latest_episodes:
+    print(f"  E{ep['episodio']:02d}: {ep['titulo']} - {ep['fecha']}")
+```
+
+### Generating Watch Lists
+
+```python
+from backend.extractors.serie_extractor import extraer_episodios_serie
+
+data = extraer_episodios_serie("https://example.com/serie/the-mandalorian/")
+
+print(f"📺 {data['info']['titulo']}")
+print(f"\n{data['info']['sinopsis']}")
+print(f"\nGenres: {', '.join(data['info']['generos'])}")
+print(f"\n🎬 Episodes:")
+
+current_season = None
+for ep in data['episodios']:
+    if ep['temporada'] != current_season:
+        current_season = ep['temporada']
+        print(f"\n  Season {current_season}:")
+    print(f"    {ep['episodio']}. {ep['titulo']}")
+```
+
+## Error Handling
+
+### Network Errors
+
+If the URL cannot be fetched, the function returns an empty structure:
+
+```python
+if not html:
+    print(f"[ERROR] No se pudo acceder a la URL: {url}")
+    return {"info": {}, "episodios": []}
+```
+
+### Episode Parsing Errors
+
+Individual episode parsing errors are caught and logged without stopping the extraction:
+
+```python
+for episodio in episodios:
+    try:
+        # Extract episode data...
+    except Exception as e:
+        print(f"⚠️ Error en episodio: {e}")
+```
+
+<Warning>
+  The function makes HTTP requests internally. Ensure you handle rate limiting and respect the website's robots.txt and terms of service.
+</Warning>
+
+## Dependencies
+
+- **BeautifulSoup4**: HTML parsing
+- **backend.utils.http_client**: HTTP request handling
+
+## Related Functions
+
+- [Generic Extractor](/api/extractors/generic-extractor) - For movie and listing extraction
+- [Iframe Extractor](/api/extractors/iframe-extractor) - For extracting video player URLs

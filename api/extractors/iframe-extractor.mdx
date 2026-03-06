@@ -1,0 +1,310 @@
+---
+title: 'Iframe Extractor'
+description: 'Extract video player iframe URLs from content pages'
+---
+
+## Overview
+
+The Iframe Extractor module is designed to extract embedded video player URLs from movie or episode pages. It handles ad-blocking and HTML cleaning before extracting the player iframe source.
+
+## Functions
+
+### extraer_iframe_reproductor
+
+Extracts the video player iframe URL from a content page, with built-in ad-blocking capabilities.
+
+#### Signature
+
+```python
+def extraer_iframe_reproductor(url: str) -> dict | None
+```
+
+#### Parameters
+
+<ParamField path="url" type="string" required>
+  The URL of the movie or episode page containing the video player
+</ParamField>
+
+#### Returns
+
+Returns a dictionary with player information, or `None` if no player is found:
+
+<ResponseField name="player_url" type="string">
+  The complete iframe source URL for the video player
+</ResponseField>
+
+<ResponseField name="fuente" type="string">
+  The domain name of the video player source (extracted from the URL)
+</ResponseField>
+
+<ResponseField name="formato" type="string">
+  The player format type (always "iframe" for this extractor)
+</ResponseField>
+
+#### Example
+
+```python
+from backend.extractors.iframe_extractor import extraer_iframe_reproductor
+
+url = "https://example.com/movie/inception/watching/"
+player_info = extraer_iframe_reproductor(url)
+
+if player_info:
+    print(f"Player URL: {player_info['player_url']}")
+    print(f"Source: {player_info['fuente']}")
+    print(f"Format: {player_info['formato']}")
+else:
+    print("No player found")
+
+# Output:
+# Player URL: https://player.example.com/embed/abc123
+# Source: player.example.com
+# Format: iframe
+```
+
+#### Full Example Response
+
+```json
+{
+  "player_url": "https://streamtape.com/e/KXo9DJm0xLf3MQp",
+  "fuente": "streamtape.com",
+  "formato": "iframe"
+}
+```
+
+## Implementation Details
+
+### Step-by-Step Process
+
+The function follows a three-step process:
+
+1. **Fetch HTML Content**
+   ```python
+   from backend.utils.http_client import fetch_html
+   
+   html = fetch_html(url)
+   if not html:
+       print(f"❌ Error al acceder a: {url}")
+       return None
+   ```
+
+2. **Clean Ads from HTML**
+   ```python
+   from backend.utils.adblocker import clean_html_ads
+   
+   html_limpio = clean_html_ads(html)
+   ```
+
+3. **Extract Iframe Source**
+   ```python
+   soup = BeautifulSoup(html_limpio, 'html.parser')
+   iframe = soup.select_one('.dooplay_player iframe')
+   
+   if iframe and iframe.get('src'):
+       url_reproductor = iframe['src']
+       return {
+           "player_url": url_reproductor,
+           "fuente": url_reproductor.split('/')[2],
+           "formato": "iframe"
+       }
+   ```
+
+### Ad-Blocking Integration
+
+The function integrates with the ad-blocker utility to remove advertising elements before parsing:
+
+```python
+from backend.utils.adblocker import clean_html_ads
+
+html_limpio = clean_html_ads(html)
+```
+
+This ensures that:
+- Ad iframes are not mistaken for video players
+- The HTML is cleaner and easier to parse
+- False positives are minimized
+
+### Domain Extraction
+
+The source domain is extracted using simple URL splitting:
+
+```python
+fuente = url_reproductor.split('/')[2]
+# 'https://player.example.com/embed/abc123' -> 'player.example.com'
+```
+
+### Target Selector
+
+The function specifically looks for iframes within the DooPlay player container:
+
+```python
+iframe = soup.select_one('.dooplay_player iframe')
+```
+
+This selector is designed for websites using the DooPlay WordPress theme, a popular choice for video streaming sites.
+
+## Use Cases
+
+### Single Video Extraction
+
+```python
+from backend.extractors.iframe_extractor import extraer_iframe_reproductor
+
+movie_url = "https://example.com/movie/the-matrix/watching/"
+player = extraer_iframe_reproductor(movie_url)
+
+if player:
+    print(f"Watch at: {player['player_url']}")
+    print(f"Hosted on: {player['fuente']}")
+else:
+    print("Video player not available")
+```
+
+### Batch Processing Episodes
+
+```python
+from backend.extractors.serie_extractor import extraer_episodios_serie
+from backend.extractors.iframe_extractor import extraer_iframe_reproductor
+
+serie_data = extraer_episodios_serie("https://example.com/serie/breaking-bad/")
+
+for episodio in serie_data['episodios'][:10]:  # First 10 episodes
+    print(f"Processing S{episodio['temporada']:02d}E{episodio['episodio']:02d}...")
+    player = extraer_iframe_reproductor(episodio['url'])
+    
+    if player:
+        print(f"  ✓ Found player: {player['fuente']}")
+    else:
+        print(f"  ✗ No player found")
+```
+
+### Building a Player Database
+
+```python
+from backend.extractors.iframe_extractor import extraer_iframe_reproductor
+import json
+
+movies = [
+    {"title": "Inception", "url": "https://example.com/movie/inception/watching/"},
+    {"title": "The Matrix", "url": "https://example.com/movie/the-matrix/watching/"},
+    {"title": "Interstellar", "url": "https://example.com/movie/interstellar/watching/"}
+]
+
+players_db = []
+
+for movie in movies:
+    player = extraer_iframe_reproductor(movie['url'])
+    if player:
+        players_db.append({
+            "title": movie['title'],
+            **player
+        })
+
+with open('players.json', 'w') as f:
+    json.dump(players_db, f, indent=2)
+
+print(f"Saved {len(players_db)} players")
+```
+
+### Analyzing Player Sources
+
+```python
+from backend.extractors.iframe_extractor import extraer_iframe_reproductor
+from collections import Counter
+
+urls = [
+    "https://example.com/movie/movie1/watching/",
+    "https://example.com/movie/movie2/watching/",
+    "https://example.com/movie/movie3/watching/",
+    # ... more URLs
+]
+
+sources = []
+
+for url in urls:
+    player = extraer_iframe_reproductor(url)
+    if player:
+        sources.append(player['fuente'])
+
+source_counts = Counter(sources)
+
+print("Player sources distribution:")
+for source, count in source_counts.most_common():
+    print(f"  {source}: {count} videos")
+```
+
+## Error Handling
+
+### Network Errors
+
+If the URL cannot be accessed, the function returns `None`:
+
+```python
+html = fetch_html(url)
+if not html:
+    print(f"❌ Error al acceder a: {url}")
+    return None
+```
+
+### Missing Iframe
+
+If no iframe is found in the expected location, a warning is printed and `None` is returned:
+
+```python
+if iframe and iframe.get('src'):
+    # Return player info
+else:
+    print("⚠️ No se encontró iframe de reproducción.")
+    return None
+```
+
+### Example Error Handling
+
+```python
+from backend.extractors.iframe_extractor import extraer_iframe_reproductor
+
+def safe_extract_player(url: str) -> dict | None:
+    try:
+        player = extraer_iframe_reproductor(url)
+        if player:
+            return player
+        else:
+            print(f"No player found at {url}")
+            return None
+    except Exception as e:
+        print(f"Error extracting player from {url}: {e}")
+        return None
+
+result = safe_extract_player("https://example.com/movie/inception/watching/")
+```
+
+## Dependencies
+
+- **BeautifulSoup4**: HTML parsing
+- **backend.utils.http_client**: HTTP request handling via `fetch_html()`
+- **backend.utils.adblocker**: Ad removal via `clean_html_ads()`
+
+## Supported Platforms
+
+This extractor is designed for websites using the **DooPlay WordPress theme**, which typically uses the `.dooplay_player` class for video player containers.
+
+Common video hosting platforms that may be extracted include:
+- Streamtape
+- Fembed
+- Uptostream
+- Doodstream
+- Mixdrop
+- And other iframe-based players
+
+<Info>
+  The extractor returns the iframe URL, not the direct video URL. Additional processing may be needed to extract direct video links from the player page.
+</Info>
+
+<Warning>
+  Always respect copyright laws and the terms of service of the websites you're scraping. This tool is intended for educational and personal use only.
+</Warning>
+
+## Related Functions
+
+- [Generic Extractor](/api/extractors/generic-extractor) - For movie listings and details
+- [Serie Extractor](/api/extractors/serie-extractor) - For series and episode information

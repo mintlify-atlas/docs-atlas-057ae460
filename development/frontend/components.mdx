@@ -1,0 +1,358 @@
+---
+title: Frontend Components
+description: Frontend component architecture and usage patterns
+---
+
+## Overview
+
+The frontend uses a component-based architecture built with React and TypeScript. Components are organized by functionality and follow consistent patterns for props, state management, and styling.
+
+## Component Structure
+
+Components are located in `src/components/` and follow these conventions:
+
+- TypeScript with typed props interfaces
+- Functional components with hooks
+- Lucide React for icons
+- Tailwind CSS with custom design system
+- React Router for navigation
+
+## Core Components
+
+### Layout Component
+
+The main layout wrapper that provides navigation, header, and footer.
+
+**Location:** `src/components/Layout.tsx`
+
+**Props:**
+```typescript
+interface LayoutProps {
+  children: React.ReactNode;
+}
+```
+
+**Features:**
+- Dynamic color scheme based on content type (series/movies/anime)
+- Mobile-responsive navigation with hamburger menu
+- Update notification system with version checking
+- Persistent state using localStorage
+
+**Usage:**
+```tsx
+import Layout from './components/Layout';
+
+<Layout>
+  <YourPageContent />
+</Layout>
+```
+
+**Color Schemes:**
+- Series: Electric Sky (`text-electric-sky`)
+- Movies: Fuchsia Pink (`text-fuchsia-pink`)
+- Anime: Magenta Pink (`text-magenta-pink`)
+
+### CatalogGrid Component
+
+Displays content items in a responsive grid layout.
+
+**Location:** `src/components/CatalogGrid.tsx`
+
+**Props:**
+```typescript
+interface CatalogGridProps {
+  items: CatalogItem[];
+  loading?: boolean;
+}
+```
+
+**Features:**
+- Responsive grid (2-6 columns based on screen size)
+- Loading skeleton states
+- Type badges (Serie/Película/Anime)
+- Hover effects with play icon overlay
+- Lazy loading for images (except first item)
+- Dynamic routing based on content type
+
+**Usage:**
+```tsx
+import CatalogGrid from './components/CatalogGrid';
+
+<CatalogGrid 
+  items={catalogItems} 
+  loading={isLoading} 
+/>
+```
+
+**Grid Breakpoints:**
+```
+2xl:grid-cols-6  // Extra large screens
+xl:grid-cols-5   // Large screens
+lg:grid-cols-4   // Desktop
+md:grid-cols-3   // Tablet
+sm:grid-cols-2   // Mobile
+```
+
+### FilterBar Component
+
+Provides search and section filtering functionality.
+
+**Location:** `src/components/FilterBar.tsx`
+
+**Props:**
+```typescript
+interface FilterBarProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+  section: string;
+  onSectionChange: (value: string) => void;
+  onDeepSearch?: (query: string) => void;
+}
+```
+
+**Features:**
+- Search input with 400ms debounce
+- Section dropdown using API data
+- Optional deep search button
+- Accessible labels and keyboard navigation
+
+**Usage:**
+```tsx
+import FilterBar from './components/FilterBar';
+
+<FilterBar
+  search={searchTerm}
+  onSearchChange={setSearchTerm}
+  section={selectedSection}
+  onSectionChange={setSelectedSection}
+  onDeepSearch={handleDeepSearch}
+/>
+```
+
+**Debounce Implementation:**
+```typescript
+useEffect(() => {
+  const handler = setTimeout(() => {
+    onSearchChange(inputValue);
+  }, 400); // 400 ms debounce
+  return () => clearTimeout(handler);
+}, [inputValue, onSearchChange]);
+```
+
+### Pagination Component
+
+Handles page navigation for catalog listings.
+
+**Location:** `src/components/Pagination.tsx`
+
+**Props:**
+```typescript
+interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  loading?: boolean;
+}
+```
+
+**Features:**
+- Smart page number display (max 5 visible)
+- Previous/Next navigation
+- Disabled state during loading
+- Responsive text labels
+
+**Usage:**
+```tsx
+import Pagination from './components/Pagination';
+
+<Pagination
+  currentPage={page}
+  totalPages={totalPages}
+  onPageChange={handlePageChange}
+  loading={isLoading}
+/>
+```
+
+**Page Number Logic:**
+```typescript
+const getPageNumbers = () => {
+  const maxVisible = 5;
+  let start = 1;
+  let end = totalPages;
+  
+  if (totalPages <= maxVisible) {
+    // Show all pages
+    start = 1;
+    end = totalPages;
+  } else if (currentPage <= 3) {
+    // Near start
+    start = 1;
+    end = 5;
+  } else if (currentPage >= totalPages - 2) {
+    // Near end
+    start = totalPages - 4;
+    end = totalPages;
+  } else {
+    // Middle pages
+    start = currentPage - 2;
+    end = currentPage + 2;
+  }
+  
+  return pages;
+};
+```
+
+### LoadingSpinner Component
+
+Reusable loading indicator.
+
+**Location:** `src/components/LoadingSpinner.tsx`
+
+**Props:**
+```typescript
+interface LoadingSpinnerProps {
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}
+```
+
+**Usage:**
+```tsx
+import LoadingSpinner from './components/LoadingSpinner';
+
+<LoadingSpinner size="lg" />
+```
+
+**Sizes:**
+- `sm`: 4x4 (h-4 w-4)
+- `md`: 8x8 (h-8 w-8) - default
+- `lg`: 12x12 (h-12 w-12)
+
+### ErrorBoundary Component
+
+Class component for catching and handling React errors.
+
+**Location:** `src/components/ErrorBoundary.tsx`
+
+**Props:**
+```typescript
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+```
+
+**Features:**
+- Catches errors in component tree
+- Displays user-friendly error message
+- Reload page functionality
+- Console error logging
+
+**Usage:**
+```tsx
+import ErrorBoundary from './components/ErrorBoundary';
+
+<ErrorBoundary>
+  <App />
+</ErrorBoundary>
+```
+
+## Component Patterns
+
+### Typed Props
+
+All components use TypeScript interfaces for props:
+
+```typescript
+interface ComponentProps {
+  required: string;
+  optional?: boolean;
+  callback: (value: string) => void;
+}
+
+const Component: React.FC<ComponentProps> = ({ required, optional = false, callback }) => {
+  // Component logic
+};
+```
+
+### Conditional Styling
+
+Components use template literals for dynamic classes:
+
+```typescript
+className={`base-classes ${
+  condition ? 'conditional-classes' : 'alternative-classes'
+}`}
+```
+
+### Icon Usage
+
+Icons from Lucide React are imported and used as components:
+
+```typescript
+import { Play, Calendar, Globe } from 'lucide-react';
+
+<Play className="h-4 w-4 text-neon-cyan" />
+```
+
+### Accessibility
+
+Components follow accessibility best practices:
+
+```tsx
+<label htmlFor="section-select" className="sr-only">
+  Filtrar por sección
+</label>
+<select id="section-select" aria-label="Filtrar por sección">
+  {/* options */}
+</select>
+```
+
+## Design System
+
+### Colors
+
+**Primary Colors:**
+- `text-neon-cyan` - Primary accent color
+- `text-electric-sky` - Series color
+- `text-fuchsia-pink` - Movies color  
+- `text-magenta-pink` - Anime color
+
+**Background Colors:**
+- `bg-space-black` - Main background
+- `bg-dark-gray` - Component backgrounds
+- `bg-gray-light` - Light text
+
+### Glow Effects
+
+Custom text glow classes:
+- `text-glow-cyan`
+- `text-glow-electric-sky`
+- `text-glow-fuchsia-pink`
+- `text-glow-magenta-pink`
+
+### Typography
+
+**Fonts:**
+- `font-orbitron` - Headers and buttons
+- `font-roboto` - Body text
+
+## Best Practices
+
+1. **Component Reusability**: Extract common patterns into reusable components
+2. **Type Safety**: Always define TypeScript interfaces for props
+3. **Performance**: Use lazy loading for images (except above-the-fold content)
+4. **Responsive Design**: Test components at all breakpoints
+5. **Accessibility**: Include ARIA labels and semantic HTML
+6. **Error Handling**: Wrap async operations in try-catch blocks
+7. **Loading States**: Provide skeleton screens or spinners during data fetching
+
+## Testing Components
+
+When creating new components:
+
+1. Define clear prop interfaces
+2. Handle loading and error states
+3. Test responsive behavior
+4. Verify accessibility with screen readers
+5. Check keyboard navigation
+6. Test with different data scenarios

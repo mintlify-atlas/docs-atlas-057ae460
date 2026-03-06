@@ -1,0 +1,512 @@
+---
+title: 'CasaOS Deployment'
+description: 'Deploy Web Scrapping Hub to CasaOS for easy home server management'
+icon: 'server'
+---
+
+Deploy Web Scrapping Hub to CasaOS for a streamlined home server experience. This guide covers installation, configuration, and management through the CasaOS interface.
+
+## What is CasaOS?
+
+CasaOS is a simple, easy-to-use home server operating system designed around Docker. It provides a web-based interface for managing containers, storage, and applications.
+
+<Note>
+**Perfect for:** Home media servers, Raspberry Pi deployments, NAS systems, and personal cloud setups.
+</Note>
+
+## Prerequisites
+
+<Warning>
+Before you begin, ensure you have:
+</Warning>
+
+- **CasaOS installed** on your server ([Installation Guide](https://docs.casaos.io/))
+- **Docker support** enabled (included by default)
+- **Network access** to your CasaOS instance
+- **Port 1234 available** (or configure an alternative)
+
+## Architecture Support
+
+Web Scrapping Hub is optimized for multiple architectures:
+
+- ✅ **AMD64** (x86_64) - Standard servers and PCs
+- ✅ **ARM64** (aarch64) - Raspberry Pi 4/5, modern ARM devices
+- ✅ **ARMv7** - Raspberry Pi 3, older ARM devices
+
+## Deployment Methods
+
+### Method 1: Using Pre-built Docker Image (Recommended)
+
+The fastest way to deploy is using the pre-built image from Docker Hub.
+
+<Steps>
+  <Step title="Access CasaOS App Store">
+    1. Open your CasaOS web interface
+    2. Navigate to **App Store** or **Apps**
+    3. Click **Install a customized app** or **Custom Install**
+  </Step>
+
+  <Step title="Configure the application">
+    Use the following docker-compose configuration:
+
+    ```yaml docker-compose.yml
+    services:
+      anxerstudios-streaming:
+        image: zlosttk/anxerstudios-streaming:latest
+        container_name: anxerstudios-streaming
+        hostname: anxerstudios-streaming
+        
+        # Resource configuration
+        cpu_shares: 90
+        deploy:
+          resources:
+            limits:
+              memory: 3369M
+        
+        # Environment variables
+        environment:
+          - PGID=1000
+          - PUID=1000
+          - TZ=America/Bogota
+          - FLASK_ENV=production
+          - FLASK_DEBUG=false
+        
+        # Network ports
+        ports:
+          - "1234:1234"
+        
+        # Persistent storage
+        volumes:
+          - /DATA/AppData/anxerstudios-streaming/app/config:/app/config
+          - /DATA/AppData/anxerstudios-streaming/logs:/app/logs
+        
+        restart: unless-stopped
+        
+        # Health monitoring
+        healthcheck:
+          test: ["CMD-SHELL", "curl -f http://localhost:1234/api/secciones || exit 1"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+          start_period: 40s
+        
+        networks:
+          - anxerstudios-streaming
+        
+        # CasaOS labels
+        labels:
+          - "https://github.com/UnfairAdventage/Web-Scrapping/blob/main/frontend/project/public/icono.png?raw=true"
+          - "casaos.description=AnxerStudios Streaming - Plataforma de streaming de películas y series"
+          - "casaos.category=Entertainment"
+
+    networks:
+      anxerstudios-streaming:
+        name: anxerstudios-streaming
+        driver: bridge
+    ```
+  </Step>
+
+  <Step title="Customize settings">
+    Adjust the following settings for your environment:
+
+    **Environment Variables:**
+    - `PUID` and `PGID`: Set to your user/group ID (find with `id` command)
+    - `TZ`: Your timezone (e.g., `America/New_York`, `Europe/London`)
+
+    **Storage Paths:**
+    ```yaml
+    volumes:
+      - /your/path/config:/app/config
+      - /your/path/logs:/app/logs
+    ```
+
+    **Memory Limit:**
+    Adjust based on your system (minimum 1GB recommended):
+    ```yaml
+    limits:
+      memory: 2048M  # 2GB
+    ```
+  </Step>
+
+  <Step title="Deploy the application">
+    1. Paste the configuration into CasaOS
+    2. Click **Install** or **Deploy**
+    3. Wait for the container to download and start
+    4. The app will appear in your CasaOS dashboard
+  </Step>
+</Steps>
+
+### Method 2: Building from Source
+
+For customization or development, build the image locally on your CasaOS server.
+
+<Steps>
+  <Step title="Connect to your CasaOS server">
+    ```bash
+    ssh user@casaos-server-ip
+    ```
+  </Step>
+
+  <Step title="Clone the repository">
+    ```bash
+    cd /DATA/AppData  # Or your preferred location
+    git clone <repository-url>
+    cd Web-Scrapping/docker
+    ```
+  </Step>
+
+  <Step title="Build the Docker image">
+    ```bash
+    docker build -t web-scrapping-hub .
+    ```
+
+    <Note>
+    Building on ARM devices (Raspberry Pi) may take 10-20 minutes due to compilation of native dependencies.
+    </Note>
+  </Step>
+
+  <Step title="Create docker-compose.yml">
+    Create a simplified compose file:
+
+    ```yaml docker-compose.yml
+    services:
+      web-scrapping-hub:
+        image: web-scrapping-hub
+        container_name: web-scrapping-hub
+        ports:
+          - "1234:1234"
+        environment:
+          - PUID=1000
+          - PGID=1000
+          - TZ=America/New_York
+        volumes:
+          - ./config:/app/config
+          - ./logs:/app/logs
+        restart: unless-stopped
+    ```
+  </Step>
+
+  <Step title="Deploy via CasaOS">
+    1. Open CasaOS web interface
+    2. Go to **App Store** > **Custom Install**
+    3. Upload your docker-compose.yml
+    4. Click **Install**
+  </Step>
+</Steps>
+
+## CasaOS-Specific Configuration
+
+### Application Labels
+
+The docker-compose includes CasaOS-specific labels for better integration:
+
+```yaml
+labels:
+  - "casaos.description=AnxerStudios Streaming - Movie and series streaming platform"
+  - "casaos.category=Entertainment"
+```
+
+### Extended Configuration (x-casaos)
+
+```yaml
+x-casaos:
+  author: ZLostTK
+  category: Entertainment
+  icon: https://icon.casaos.io/main/all/anxerstudios-streaming.png
+  index: /
+  port_map: "1234"
+  scheme: http
+  title:
+    custom: "AnxerStudios Streaming"
+    en_us: "AnxerStudios Streaming"
+  description:
+    en_us: "Plataforma de streaming para películas, series y anime con interfaz React y backend Flask"
+```
+
+This provides:
+- Custom app icon in CasaOS dashboard
+- Proper categorization (Entertainment)
+- Direct launch from dashboard
+- Metadata for app store listing
+
+## Accessing Your Application
+
+### Local Network Access
+
+Once deployed, access the application from any device on your network:
+
+```
+http://<CASAOS_IP>:1234
+```
+
+**Find your CasaOS IP:**
+```bash
+ip addr show | grep "inet "
+```
+
+### Example URLs
+
+- **Home page**: `http://192.168.1.100:1234/page/1`
+- **Search**: `http://192.168.1.100:1234/page/1?search=action`
+- **Player**: `http://192.168.1.100:1234/ver/pelicula/movie-name`
+
+### Access from Mobile/TV
+
+<Note>
+The frontend automatically detects your server IP. Simply navigate to `http://<CASAOS_IP>:1234` on any device connected to your network.
+</Note>
+
+## Managing the Application in CasaOS
+
+### Through CasaOS Dashboard
+
+1. **Start/Stop**: Click the app tile to view controls
+2. **Logs**: Click **Logs** to view application output
+3. **Terminal**: Access container shell for debugging
+4. **Settings**: Modify environment variables and volumes
+5. **Uninstall**: Remove the application and optionally delete data
+
+### Command Line Management
+
+```bash
+# View running containers
+docker ps
+
+# View logs
+docker logs -f anxerstudios-streaming
+
+# Restart container
+docker restart anxerstudios-streaming
+
+# Update container
+docker-compose pull
+docker-compose up -d
+```
+
+## Resource Management
+
+### Memory Configuration
+
+The default configuration allocates 3.3GB of memory. Adjust based on your system:
+
+**For Raspberry Pi 4 (4GB):**
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 1536M  # 1.5GB
+```
+
+**For Raspberry Pi 4 (8GB) or better:**
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 2048M  # 2GB
+```
+
+### CPU Shares
+
+```yaml
+cpu_shares: 90  # Lower priority (default: 1024)
+```
+
+Adjust CPU priority:
+- `1024`: Normal priority
+- `512`: Lower priority (good for background services)
+- `2048`: Higher priority
+
+## Storage and Persistence
+
+### Default Volume Paths
+
+```yaml
+volumes:
+  - /DATA/AppData/anxerstudios-streaming/app/config:/app/config
+  - /DATA/AppData/anxerstudios-streaming/logs:/app/logs
+```
+
+### Creating Volume Directories
+
+```bash
+sudo mkdir -p /DATA/AppData/anxerstudios-streaming/app/config
+sudo mkdir -p /DATA/AppData/anxerstudios-streaming/logs
+sudo chown -R 1000:1000 /DATA/AppData/anxerstudios-streaming
+```
+
+## Updating the Application
+
+<Steps>
+  <Step title="Via CasaOS Dashboard">
+    1. Open the app settings
+    2. Click **Update** if available
+    3. Wait for the update to complete
+    4. Container will restart automatically
+  </Step>
+
+  <Step title="Via Command Line">
+    ```bash
+    cd /path/to/docker-compose
+    docker-compose pull
+    docker-compose down
+    docker-compose up -d
+    ```
+  </Step>
+
+  <Step title="Verify the update">
+    Check the application version in the interface or logs:
+
+    ```bash
+    docker logs anxerstudios-streaming | grep "Version"
+    ```
+
+    Current version: **1.4.8**
+  </Step>
+</Steps>
+
+## Health Monitoring
+
+The application includes automatic health checks:
+
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "curl -f http://localhost:1234/api/secciones || exit 1"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+```
+
+**What this does:**
+- Checks `/api/secciones` endpoint every 30 seconds
+- Marks container unhealthy after 3 failed attempts
+- Allows 40 seconds for initial startup
+- CasaOS will show health status in dashboard
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="App not accessible from network">
+    1. **Check firewall on CasaOS server:**
+    ```bash
+    sudo ufw status
+    sudo ufw allow 1234/tcp
+    ```
+
+    2. **Verify container is running:**
+    ```bash
+    docker ps | grep streaming
+    ```
+
+    3. **Check port binding:**
+    ```bash
+    docker port anxerstudios-streaming
+    ```
+
+    4. **Test locally first:**
+    ```bash
+    curl http://localhost:1234
+    ```
+  </Accordion>
+
+  <Accordion title="Container won't start">
+    **Check logs for errors:**
+    ```bash
+    docker logs anxerstudios-streaming
+    ```
+
+    **Common issues:**
+    - Port 1234 already in use (change in docker-compose.yml)
+    - Insufficient memory (reduce limit or upgrade RAM)
+    - Permission issues with volumes (check ownership)
+  </Accordion>
+
+  <Accordion title="Slow performance on Raspberry Pi">
+    **Optimize for ARM devices:**
+
+    1. Reduce memory limit:
+    ```yaml
+    limits:
+      memory: 1024M
+    ```
+
+    2. Lower CPU priority:
+    ```yaml
+    cpu_shares: 512
+    ```
+
+    3. Consider overclocking your Raspberry Pi (Pi 4 only)
+  </Accordion>
+
+  <Accordion title="Health check failing">
+    1. **Check if Flask is running:**
+    ```bash
+    docker exec anxerstudios-streaming curl http://localhost:1234/api/secciones
+    ```
+
+    2. **Increase start_period for slower devices:**
+    ```yaml
+    healthcheck:
+      start_period: 60s  # Increase from 40s
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Configuration
+
+### Custom Port
+
+Change the external port (1234) if needed:
+
+```yaml
+ports:
+  - "8080:1234"  # Access via http://<IP>:8080
+```
+
+### Reverse Proxy (Nginx/Traefik)
+
+For HTTPS and custom domains:
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.streaming.rule=Host(`streaming.local`)"
+  - "traefik.http.services.streaming.loadbalancer.server.port=1234"
+```
+
+### Custom Network
+
+Integrate with existing CasaOS networks:
+
+```yaml
+networks:
+  default:
+    external:
+      name: casaos-network
+```
+
+## Resources and Support
+
+<CardGroup cols={2}>
+  <Card title="CasaOS Documentation" icon="book" href="https://docs.casaos.io/">
+    Official CasaOS setup and configuration guides
+  </Card>
+  <Card title="Docker Documentation" icon="docker" href="/installation/docker-deployment">
+    General Docker deployment information
+  </Card>
+  <Card title="Local Setup" icon="laptop-code" href="/installation/local-setup">
+    Development environment setup guide
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/architecture/overview">
+    System architecture and design
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+Now that your application is running on CasaOS:
+
+1. **Configure content sources** in the application settings
+2. **Set up automatic updates** using Watchtower or similar
+3. **Configure backups** for your config and logs directories
+4. **Explore the API** for integration with other services

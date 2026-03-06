@@ -1,0 +1,627 @@
+---
+title: 'Video Player'
+description: 'Advanced video player with adaptive controls, episode navigation, and responsive design'
+icon: 'play'
+---
+
+## Overview
+
+Web Scraping Hub features a sophisticated video player system with adaptive theming, episode management, and responsive design that works seamlessly across devices. The player supports movies, series, and anime with specialized controls for each content type.
+
+## Player Architecture
+
+<Tabs>
+  <Tab title="Movies">
+    ### Movie Player
+    
+    Single video playback with metadata display:
+    - Full-screen optimized layout
+    - Title and genre information
+    - Synopsis display below player
+    - Direct iframe embedding
+    - Fuchsia pink theme
+  </Tab>
+  
+  <Tab title="Series">
+    ### Series Player
+    
+    Multi-episode navigation system:
+    - Season selector sidebar
+    - Episode list with thumbnails
+    - Previous/Next episode buttons
+    - Current episode highlighting
+    - Neon cyan theme
+  </Tab>
+  
+  <Tab title="Anime">
+    ### Anime Player
+    
+    Specialized anime viewing experience:
+    - Season-based organization
+    - Episode thumbnails
+    - Sequential watching support
+    - Progress tracking
+    - Magenta pink theme
+  </Tab>
+</Tabs>
+
+## Adaptive Theming System
+
+The player automatically adjusts its color scheme based on content type:
+
+```tsx PlayerPage.tsx:69-104
+const getThemeColors = () => {
+  if (isMovie) {
+    return {
+      primary: 'fuchsia-pink',
+      primaryText: 'text-fuchsia-pink',
+      primaryBg: 'bg-fuchsia-pink',
+      border: 'border-fuchsia-pink',
+      hover: 'hover:bg-fuchsia-pink/20',
+      glow: 'text-glow-fuchsia-pink'
+    };
+  } else if (isAnime) {
+    return {
+      primary: 'neon-magenta',
+      primaryText: 'text-neon-magenta',
+      primaryBg: 'bg-neon-magenta',
+      border: 'border-neon-magenta',
+      hover: 'hover:bg-neon-magenta/20',
+      glow: 'text-glow-magenta-pink'
+    };
+  } else { // Series
+    return {
+      primary: 'neon-cyan',
+      primaryText: 'text-neon-cyan',
+      primaryBg: 'bg-neon-cyan',
+      border: 'border-neon-cyan',
+      hover: 'hover:bg-neon-cyan/20',
+      glow: 'text-glow-cyan'
+    };
+  }
+};
+```
+
+<CardGroup cols={3}>
+  <Card title="Movie Theme" icon="film" color="#ff006e">
+    Fuchsia pink accents with matching glows and borders
+  </Card>
+  <Card title="Series Theme" icon="tv" color="#00d9ff">
+    Electric cyan for TV series content
+  </Card>
+  <Card title="Anime Theme" icon="sparkles" color="#ff00ff">
+    Neon magenta for anime differentiation
+  </Card>
+</CardGroup>
+
+## Responsive Design
+
+### Orientation Detection
+
+The player includes intelligent orientation handling:
+
+```tsx PlayerPage.tsx:8-33
+const useOrientation = () => {
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkOrientation = () => {
+      const isMobileDevice = window.innerWidth <= 768;
+      const isPortraitMode = window.innerHeight > window.innerWidth;
+      
+      setIsMobile(isMobileDevice);
+      setIsPortrait(isPortraitMode);
+    };
+
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+  }, []);
+
+  return { isPortrait, isMobile, isMobilePortrait: isMobile && isPortrait };
+};
+```
+
+<Accordion title="Adaptive Layouts">
+  - **Desktop**: Multi-column layout with sidebar for series/anime
+  - **Mobile Landscape**: Full-screen player with minimal controls
+  - **Mobile Portrait**: Vertical stacking with footer navigation
+  - **Tablet**: Hybrid layout balancing content and controls
+</Accordion>
+
+### Layout Configurations
+
+| Device State | Player Height | Sidebar | Controls Position |
+|--------------|---------------|---------|-------------------|
+| Desktop Movie | 50rem | None | Below player |
+| Desktop Series | 40rem | Right sidebar | Below player |
+| Mobile Landscape | 100vh | Hidden | Overlay |
+| Mobile Portrait | Flex-1 | Hidden | Footer |
+
+## Player Controls
+
+### Episode Navigation (Series/Anime)
+
+<Steps>
+  <Step title="Previous Episode">
+    Button enabled when not on first episode of season
+  </Step>
+  <Step title="Next Episode">
+    Button enabled when not on last episode of season
+  </Step>
+  <Step title="Exit Player">
+    Returns to catalog homepage
+  </Step>
+</Steps>
+
+```tsx PlayerPage.tsx:385-415
+<div className="flex gap-3">
+  {(isSeries || isAnime) && getCurrentEpisodeIndex() > 0 && (
+    <button
+      onClick={() => navigateToEpisode('prev')}
+      disabled={getCurrentEpisodeIndex() <= 0}
+      className="px-5 py-2 bg-dark-gray hover:bg-gray-800 rounded-full"
+    >
+      <ChevronLeft className="h-4 w-4" />
+      Previous
+    </button>
+  )}
+  
+  {(isSeries || isAnime) && getCurrentEpisodeIndex() < currentSeasonEpisodes.length - 1 && (
+    <button
+      onClick={() => navigateToEpisode('next')}
+      className="px-5 py-2 bg-dark-gray hover:bg-gray-800 rounded-full"
+    >
+      Next
+      <ChevronRight className="h-4 w-4" />
+    </button>
+  )}
+  
+  <button
+    onClick={() => navigate('/')}
+    className="px-5 py-2 bg-dark-gray rounded-full"
+  >
+    <X className="h-4 w-4" />
+    Salir
+  </button>
+</div>
+```
+
+<Note>
+Buttons feature rounded design with hover effects that transition from gray to the content-type theme color.
+</Note>
+
+### Keyboard Shortcuts
+
+The player supports keyboard controls:
+
+```tsx PlayerPage.tsx:255-264
+useEffect(() => {
+  const handleEscape = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      navigate('/');
+    }
+  };
+
+  document.addEventListener('keydown', handleEscape);
+  return () => document.removeEventListener('keydown', handleEscape);
+}, [navigate]);
+```
+
+| Key | Action |
+|-----|--------|
+| Escape | Exit player and return to catalog |
+
+## Iframe Management
+
+### Video Source Handling
+
+The player intelligently handles different video sources:
+
+```tsx PlayerPage.tsx:190-203
+const videoUrl = isMovie 
+  ? (finalMovieData?.player_url || '')
+  : (currentEpisode?.url || '');
+
+const { data: playerData } = usePlayerData(
+  isMovie ? '' : videoUrl
+);
+
+const iframeUrl = isMovie 
+  ? (finalMovieData?.player_url || '')
+  : (playerData?.player_url || '');
+```
+
+<Tabs>
+  <Tab title="Movie Playback">
+    Movies use direct iframe URLs from the movie data API:
+    - URL extracted by `iframe_extractor.py`
+    - Direct embedding without processing
+    - Single source per movie
+  </Tab>
+  
+  <Tab title="Series/Anime Playback">
+    Series and anime process episode URLs through `usePlayerData`:
+    - Episode URL extracted from series data
+    - Processed by iframe extractor
+    - Multiple sources per season
+  </Tab>
+</Tabs>
+
+### Ad Blocking Integration
+
+The player includes client-side ad removal:
+
+```tsx PlayerPage.tsx:205-223
+const cleanAdsInIframe = () => {
+  const iframe = iframeRef.current;
+  if (iframe && iframe.contentDocument) {
+    const doc = iframe.contentDocument;
+    
+    const adSelectors = [
+      '.modal-content-vast', '#skipCountdown', 'video#adVideo',
+      '[id*="ad"]', '[class*="ad"]', '[id*="ads"]',
+      '[id*="banner"]', '[id*="sponsor"]', '[id*="promo"]'
+    ];
+    
+    adSelectors.forEach(selector => {
+      doc.querySelectorAll(selector).forEach(el => el.remove());
+    });
+  }
+};
+```
+
+<Warning>
+Iframe ad cleaning only works for same-origin iframes due to browser security restrictions.
+</Warning>
+
+## Season and Episode Management
+
+### Season Selector
+
+Series and anime display a season selector sidebar:
+
+```tsx PlayerPage.tsx:464-482
+{seasons.length > 1 && (
+  <div className="bg-dark-gray p-5 rounded-xl">
+    <h3 className="orbitron text-lg font-bold mb-3">Temporadas</h3>
+    <div className="flex flex-wrap gap-2">
+      {seasons.map((season) => (
+        <button
+          key={season}
+          onClick={() => handleSeasonChange(season)}
+          className={`px-3 py-2 rounded-lg font-bold ${
+            selectedSeason === season
+              ? `${theme.primaryBg} ${theme.glow}`
+              : 'bg-space-black hover:bg-gray-700'
+          }`}
+        >
+          S{season}
+        </button>
+      ))}
+    </div>
+  </div>
+)}
+```
+
+### Episode List Display
+
+Episodes show with thumbnails and metadata:
+
+```tsx PlayerPage.tsx:494-550
+{currentSeasonEpisodes.slice(0, 10).map((episode: Episode) => {
+  const isCurrentEpisode = currentEpisode && 
+    episode.season === currentEpisode.season && 
+    episode.episode === currentEpisode.episode;
+  
+  return (
+    <div className="flex items-center gap-3 p-2 rounded cursor-pointer">
+      <div className="relative w-12 h-8 rounded-sm overflow-hidden">
+        {episode.image ? (
+          <img src={episode.image} alt={episode.title} loading="lazy" />
+        ) : (
+          <div className="flex items-center justify-center bg-gray-700">
+            <span>{episode.episode}</span>
+          </div>
+        )}
+      </div>
+      <div>
+        <span>Episode {episode.episode}</span>
+        {episode.title && <span>{episode.title}</span>}
+      </div>
+    </div>
+  );
+})}
+```
+
+<Info>
+The episode list limits display to 10 episodes for performance, showing the current season's episodes.
+</Info>
+
+## Metadata Display
+
+### Title Banner
+
+Dynamic title display with emoji indicators:
+
+```tsx PlayerPage.tsx:418-420
+<div className="bg-neon-cyan text-space-black text-center py-2 px-4 rounded-full font-bold">
+  {fullTitle} {isMovie ? '🎬' : isAnime ? '🌸' : '📺'}
+</div>
+```
+
+### Information Panel
+
+Comprehensive metadata below the player:
+
+<CardGroup cols={2}>
+  <Card title="Primary Info" icon="info">
+    - Content title
+    - Episode number (if applicable)
+    - Release year
+    - Primary genre
+  </Card>
+  <Card title="Additional Info" icon="tags">
+    - All genres (up to 4 displayed)
+    - Language (Latino)
+    - Content type
+    - Synopsis
+  </Card>
+</CardGroup>
+
+```tsx PlayerPage.tsx:422-457
+<div className="bg-dark-gray p-5 rounded-xl space-y-4">
+  <h2 className="text-neon-cyan">{title}</h2>
+  <h1 className="text-2xl md:text-3xl orbitron font-bold">
+    {isMovie ? 'Movie' : `Episode ${currentEpisode.episode}`}
+  </h1>
+  <p className="text-gray-light text-sm">
+    {genres && genres.split(',')[0]} • {year} • Latino
+  </p>
+  
+  {/* Genre tags */}
+  <div className="flex flex-wrap gap-2">
+    {genres.split(',').slice(0, 4).map((genre, index) => (
+      <span className="px-3 py-1 bg-space-black rounded-full text-xs">
+        {genre.trim()}
+      </span>
+    ))}
+  </div>
+  
+  {/* Synopsis */}
+  <p className="text-gray-light text-sm leading-relaxed">
+    {sinopsis || 'Sinopsis no disponible'}
+  </p>
+</div>
+```
+
+## Data Caching Strategy
+
+The player uses optimized hooks for data fetching:
+
+```tsx PlayerPage.tsx:112-125
+const { data: finalMovieData } = useCachedMovieData(
+  isMovie ? (slug || '') : '',
+  passedMovieData
+);
+
+const { data: seriesData } = useCachedSeriesData(
+  isSeries ? (seriesSlug || '') : '',
+  passedSeriesData
+);
+
+const { data: animeData } = useCachedAnimeData(
+  isAnime ? (seriesSlug || '') : '',
+  passedAnimeData
+);
+```
+
+<Accordion title="Cache Optimization Benefits">
+  - **Pre-cached data**: Uses data passed from catalog navigation
+  - **Conditional fetching**: Only fetches if data not available
+  - **Background updates**: Refreshes stale data automatically
+  - **Error recovery**: Retries failed requests
+</Accordion>
+
+## URL Routing System
+
+### Movie URLs
+```
+/ver/pelicula/{slug}
+```
+
+### Series URLs
+```
+/ver/serie/{series-slug}-{season}x{episode}
+```
+Example: `/ver/serie/breaking-bad-1x1`
+
+### Anime URLs
+```
+/ver/anime/{anime-slug}-{season}x{episode}
+```
+Example: `/ver/anime/naruto-1x1`
+
+### Slug Parsing
+
+```tsx PlayerPage.tsx:51-61
+const parseSeriesSlug = (slug: string) => {
+  const match = slug.match(/^(.+)-(\d+)x(\d+)$/);
+  if (match) {
+    return {
+      seriesSlug: match[1],
+      season: parseInt(match[2]),
+      episode: parseInt(match[3])
+    };
+  }
+  return null;
+};
+```
+
+## Backend Player Extraction
+
+### Movie Player Extraction
+
+```python app.py:187-229
+@app.route('/api/pelicula/<slug>', methods=['GET'])
+def api_ver_pelicula(slug):
+    # Search in Movies section
+    url = f"{movies_url}/{slug}"
+    player = extraer_iframe_reproductor(url)
+    
+    if not player:
+        # Fallback to Anime Movies section
+        url = f"{anime_movies_url}/{slug}"
+        player = extraer_iframe_reproductor(url)
+    
+    if not player:
+        return jsonify({"error": "Película no encontrada"}), 404
+    
+    return jsonify({
+        "slug": slug,
+        "player": {
+            "player_url": player.get("player_url"),
+            "source": player.get("fuente"),
+            "format": player.get("formato")
+        }
+    })
+```
+
+### Series Player Extraction
+
+```python app.py:158-185
+@app.route('/api/serie/<slug>', methods=['GET'])
+def api_ver_serie(slug):
+    url = f"{series_url}/{slug}"
+    result = extraer_episodios_serie(url)
+    episodios = result.get("episodios", [])
+    
+    if not episodios:
+        # Fallback to anime section
+        url = f"{anime_url}/{slug}"
+        result = extraer_episodios_serie(url)
+        episodios = result.get("episodios", [])
+    
+    # Group episodes by season
+    temporadas = {}
+    for ep in episodios:
+        t = ep['temporada']
+        if t not in temporadas:
+            temporadas[t] = []
+        temporadas[t].append(ep)
+    
+    return jsonify({"temporadas": temporadas, "info": result.get("info", {})})
+```
+
+## Iframe Extraction Process
+
+<Steps>
+  <Step title="Fetch HTML">
+    Download page HTML using Cloudflare bypass
+  </Step>
+  <Step title="Clean Ads">
+    Remove ad elements before parsing
+  </Step>
+  <Step title="Parse DOM">
+    Use BeautifulSoup to find player iframe
+  </Step>
+  <Step title="Extract URL">
+    Get iframe src attribute
+  </Step>
+  <Step title="Return Metadata">
+    Include player URL, source domain, and format
+  </Step>
+</Steps>
+
+```python iframe_extractor.py:6-23
+def extraer_iframe_reproductor(url):
+    html = fetch_html(url)
+    if not html:
+        return None
+    
+    html_limpio = clean_html_ads(html)
+    soup = BeautifulSoup(html_limpio, 'html.parser')
+    iframe = soup.select_one('.dooplay_player iframe')
+    
+    if iframe and iframe.get('src'):
+        url_reproductor = iframe['src']
+        return {
+            "player_url": url_reproductor,
+            "fuente": url_reproductor.split('/')[2],
+            "formato": "iframe"
+        }
+    return None
+```
+
+## Loading and Error States
+
+### Loading Display
+
+```tsx PlayerPage.tsx:266-272
+if (isLoading) {
+  return (
+    <div className="min-h-screen bg-space-black flex items-center justify-center">
+      <LoadingSpinner size="lg" />
+    </div>
+  );
+}
+```
+
+### Error Handling
+
+```tsx PlayerPage.tsx:274-291
+if (error || !data) {
+  return (
+    <div className="min-h-screen bg-space-black flex items-center justify-center">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-white mb-2">
+          Contenido no encontrado
+        </h2>
+        <p className="text-gray-400 mb-4">
+          El contenido que buscas no existe o ha sido eliminado.
+        </p>
+        <Link to="/" className="bg-blue-600 px-6 py-2 rounded-md">
+          Volver al catálogo
+        </Link>
+      </div>
+    </div>
+  );
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Performance Optimization">
+    - Use cached data when navigating from catalog
+    - Lazy load episode thumbnails
+    - Limit episode list to 10 visible items
+    - Debounce orientation change events
+  </Accordion>
+  
+  <Accordion title="User Experience">
+    - Show loading states during player initialization
+    - Provide clear error messages with recovery options
+    - Support keyboard navigation (Escape to exit)
+    - Use theme colors for consistent branding
+  </Accordion>
+  
+  <Accordion title="Mobile Optimization">
+    - Detect orientation and adjust layout
+    - Hide sidebars in portrait mode
+    - Use full-screen player on landscape
+    - Optimize touch targets (48px minimum)
+  </Accordion>
+</AccordionGroup>
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Catalog Browsing" icon="grid" href="/features/catalog-browsing">
+    Navigate to player from catalog
+  </Card>
+  <Card title="Web Scraping" icon="spider" href="/features/web-scraping">
+    Learn how player URLs are extracted
+  </Card>
+</CardGroup>

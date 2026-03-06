@@ -1,0 +1,102 @@
+---
+title: 'Get Secciones'
+api: 'GET /api/secciones'
+description: 'Retrieve the list of available content sections'
+---
+
+## Endpoint
+
+```
+GET /api/secciones
+```
+
+## Description
+
+Returns a list of all available content sections (categories) that can be used to browse content. These sections correspond to different types of content and streaming networks.
+
+## Parameters
+
+This endpoint does not require any parameters.
+
+## Response
+
+<ResponseField name="secciones" type="array" required>
+  Array of section names (strings)
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:1234/api/secciones
+```
+
+```javascript JavaScript
+fetch('http://localhost:1234/api/secciones')
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get('http://localhost:1234/api/secciones')
+data = response.json()
+print(data)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "secciones": [
+    "Películas",
+    "Series",
+    "Anime",
+    "Peliculas de Anime",
+    "Caricaturas",
+    "K-Drama",
+    "Amazon",
+    "Apple TV",
+    "Disney",
+    "HBO",
+    "HBO Max",
+    "Hulu",
+    "Netflix"
+  ]
+}
+```
+
+## Available Sections
+
+The API provides the following content sections:
+
+### Content Types
+- **Películas** - Movies
+- **Series** - TV Series
+- **Anime** - Japanese animation series
+- **Peliculas de Anime** - Anime movies
+- **Caricaturas** - Cartoons
+- **K-Drama** - Korean dramas
+
+### Streaming Networks
+- **Amazon** - Amazon Prime Video content
+- **Apple TV** - Apple TV+ content
+- **Disney** - Disney+ content
+- **HBO** - HBO content
+- **HBO Max** - HBO Max content
+- **Hulu** - Hulu content
+- **Netflix** - Netflix content
+
+## Usage with Listado Endpoint
+
+Use these section names with the `/api/listado` endpoint to browse specific categories:
+
+```bash
+curl "http://localhost:1234/api/listado?seccion=Netflix&pagina=1"
+```
+
+## Case Sensitivity
+
+Section names are normalized (case-insensitive and accent-insensitive) when used as parameters in other endpoints, so "netflix", "Netflix", and "NETFLIX" are all accepted.

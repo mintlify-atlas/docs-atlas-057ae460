@@ -1,0 +1,201 @@
+---
+title: 'Backend Configuration'
+description: 'Configure the Flask backend server and application settings'
+icon: 'server'
+---
+
+## Overview
+
+The backend configuration is managed through `config.py`, which contains all core settings for the Web Scraping Hub application. This file controls application versioning, scraping targets, and API endpoints.
+
+## Configuration File Location
+
+The main configuration file is located at:
+
+```
+backend/config.py
+```
+
+## Application Configuration
+
+### Version Settings
+
+<ParamField path="APP_VERSION" type="string" default="1.4.8">
+  Current version of the application. This is used for version checking and update notifications.
+</ParamField>
+
+<ParamField path="GITHUB_VERSION_URL" type="string">
+  URL to check for the latest version available on GitHub.
+  
+  ```python
+  GITHUB_VERSION_URL = "https://raw.githubusercontent.com/UnfairAdventage/Web-Scrapping/refs/heads/main/CurrentVersion"
+  ```
+</ParamField>
+
+<ParamField path="GITHUB_CHANGES_URL" type="string">
+  URL to fetch the changelog from GitHub.
+  
+  ```python
+  GITHUB_CHANGES_URL = "https://raw.githubusercontent.com/UnfairAdventage/Web-Scrapping/refs/heads/main/Changes"
+  ```
+</ParamField>
+
+## Scraping Configuration
+
+### Base URL
+
+<ParamField path="BASE_URL" type="string" default="https://sololatino.net">
+  The base URL for all scraping operations. All target URLs are constructed relative to this base.
+  
+  ```python
+  BASE_URL = "https://sololatino.net"
+  ```
+</ParamField>
+
+<Warning>
+  Changing the `BASE_URL` will affect all scraping operations. Ensure the new URL follows the same structure and API patterns as the default.
+</Warning>
+
+### Target URLs Configuration
+
+<ParamField path="TARGET_URLS" type="list[dict]">
+  List of scraping targets, each containing a name and URL. This defines all content categories available in the application.
+  
+  Each target is a dictionary with:
+  - `nombre` (string): Display name for the section
+  - `url` (string): Full URL to scrape
+</ParamField>
+
+## Flask Server Configuration
+
+The Flask server is configured in `backend/app.py` with the following settings:
+
+### Server Settings
+
+<ParamField path="host" type="string" default="0.0.0.0">
+  Server host address. Using `0.0.0.0` allows external connections.
+  
+  ```python
+  app.run(debug=True, host='0.0.0.0', port="1234")
+  ```
+</ParamField>
+
+<ParamField path="port" type="string" default="1234">
+  Port number for the Flask server.
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="true">
+  Enable debug mode for development. Should be `false` in production.
+</ParamField>
+
+### CORS Configuration
+
+```python
+from flask_cors import CORS
+CORS(app)
+```
+
+CORS is enabled by default to allow frontend-backend communication during development.
+
+### Caching Configuration
+
+<ParamField path="SEND_FILE_MAX_AGE_DEFAULT" type="integer" default="0">
+  Maximum age for file caching. Set to 0 to disable caching.
+  
+  ```python
+  app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+  ```
+</ParamField>
+
+<ParamField path="ETAG_DISABLED" type="boolean" default="true">
+  Disable ETags for responses.
+  
+  ```python
+  app.config['ETAG_DISABLED'] = True
+  ```
+</ParamField>
+
+## HTTP Client Configuration
+
+The application uses `cloudscraper` to bypass anti-bot protection:
+
+```python
+import cloudscraper
+_scraper = cloudscraper.create_scraper()
+```
+
+### Request Timeouts
+
+<ParamField path="timeout" type="integer" default="30">
+  Default timeout for HTTP requests in seconds.
+  
+  ```python
+  response = _scraper.get(url, timeout=30)
+  ```
+</ParamField>
+
+<Info>
+  The timeout for version checks is reduced to 5 seconds to prevent blocking during startup.
+</Info>
+
+## Custom Configuration Example
+
+To customize the configuration for your needs:
+
+```python
+# backend/config.py
+
+# APP CONFIG
+APP_VERSION = "1.5.0"
+GITHUB_VERSION_URL = "https://your-repo.com/version"
+GITHUB_CHANGES_URL = "https://your-repo.com/changes"
+
+# SCRAPING CONFIG
+BASE_URL = "https://your-target-site.com"
+
+TARGET_URLS = [
+    {"nombre": "Movies", "url": f"{BASE_URL}/movies"},
+    {"nombre": "TV Shows", "url": f"{BASE_URL}/tv-shows"},
+    {"nombre": "Documentaries", "url": f"{BASE_URL}/docs"},
+]
+```
+
+## Modifying Server Settings
+
+To change the server port or host, edit `backend/app.py`:
+
+```python
+if __name__ == '__main__':
+    app.run(
+        debug=False,  # Set to False in production
+        host='0.0.0.0',  # Allow external connections
+        port="8080"  # Your custom port
+    )
+```
+
+<Warning>
+  Always set `debug=False` in production environments to prevent security vulnerabilities and information leakage.
+</Warning>
+
+## Configuration Validation
+
+To verify your configuration is working:
+
+```bash
+# Test the API endpoints
+curl http://localhost:1234/api/secciones
+
+# Check version information
+curl http://localhost:1234/api/version
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Target URLs" icon="bullseye-arrow" href="/configuration/target-urls">
+    Learn how to configure scraping targets
+  </Card>
+  <Card title="Environment Variables" icon="code" href="/configuration/environment">
+    Set up environment-specific configuration
+  </Card>
+</CardGroup>

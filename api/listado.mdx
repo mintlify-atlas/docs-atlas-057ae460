@@ -1,0 +1,244 @@
+---
+title: 'Get Listado'
+api: 'GET /api/listado'
+description: 'Browse content by section or search for specific titles'
+---
+
+## Endpoint
+
+```
+GET /api/listado
+```
+
+## Description
+
+Retrieve a paginated list of movies, series, or anime from a specific section, or search for content by keyword. This is the primary endpoint for browsing and discovering content.
+
+## Parameters
+
+<ParamField query="seccion" type="string">
+  The section to browse. Must be one of the sections returned by `/api/secciones`. Case-insensitive. Defaults to "Películas" if not provided.
+</ParamField>
+
+<ParamField query="pagina" type="integer" default="1">
+  Page number for pagination. Starts at 1.
+</ParamField>
+
+<ParamField query="busqueda" type="string">
+  Search keyword. When provided, performs a search instead of browsing by section. Overrides `seccion` and `pagina` parameters.
+</ParamField>
+
+## Response
+
+<ResponseField name="resultados" type="array" required>
+  Array of content items
+  
+  <Expandable title="Item properties">
+    <ResponseField name="id" type="string">
+      Unique identifier for the item
+    </ResponseField>
+    
+    <ResponseField name="slug" type="string">
+      URL-friendly identifier used in detail endpoints
+    </ResponseField>
+    
+    <ResponseField name="titulo" type="string">
+      Title of the content (for browse results)
+    </ResponseField>
+    
+    <ResponseField name="title" type="string">
+      Title of the content (for search results)
+    </ResponseField>
+    
+    <ResponseField name="alt" type="string">
+      Alternative text for the image
+    </ResponseField>
+    
+    <ResponseField name="imagen" type="string">
+      URL of the poster image (for browse results)
+    </ResponseField>
+    
+    <ResponseField name="image" type="string">
+      URL of the poster image (for search results)
+    </ResponseField>
+    
+    <ResponseField name="year" type="string">
+      Release year or date
+    </ResponseField>
+    
+    <ResponseField name="generos" type="string">
+      Comma-separated genres (for browse results)
+    </ResponseField>
+    
+    <ResponseField name="idioma" type="string">
+      Audio language (e.g., "Latino", "Otro")
+    </ResponseField>
+    
+    <ResponseField name="tipo" type="string">
+      Content type: "pelicula", "serie", "movie", "series", or "anime"
+    </ResponseField>
+    
+    <ResponseField name="type" type="string">
+      Content type for search results
+    </ResponseField>
+    
+    <ResponseField name="url" type="string">
+      Full URL to the content page
+    </ResponseField>
+    
+    <ResponseField name="language" type="string">
+      Language for search results
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="seccion" type="string" required>
+  The section name used for the query (or "Busqueda" for search)
+</ResponseField>
+
+<ResponseField name="pagina" type="integer" required>
+  Current page number
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the request fails
+</ResponseField>
+
+<ResponseField name="warning" type="string">
+  Warning message for unexpected response formats
+</ResponseField>
+
+## Example Requests
+
+### Browse by Section
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:1234/api/listado?seccion=Netflix&pagina=1"
+```
+
+```javascript JavaScript
+fetch('http://localhost:1234/api/listado?seccion=Netflix&pagina=1')
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'http://localhost:1234/api/listado',
+    params={'seccion': 'Netflix', 'pagina': 1}
+)
+data = response.json()
+print(data)
+```
+</CodeGroup>
+
+### Search for Content
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:1234/api/listado?busqueda=spider"
+```
+
+```javascript JavaScript
+fetch('http://localhost:1234/api/listado?busqueda=spider')
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'http://localhost:1234/api/listado',
+    params={'busqueda': 'spider'}
+)
+data = response.json()
+print(data)
+```
+</CodeGroup>
+
+## Example Response
+
+### Browse Response
+
+```json
+{
+  "resultados": [
+    {
+      "id": "12345",
+      "slug": "the-batman-2022",
+      "titulo": "The Batman",
+      "alt": "The Batman",
+      "imagen": "https://example.com/poster.jpg",
+      "year": "2022",
+      "generos": "Action, Crime, Drama",
+      "idioma": "Latino",
+      "tipo": "pelicula",
+      "url": "https://sololatino.net/peliculas/the-batman-2022"
+    }
+  ],
+  "seccion": "Películas",
+  "pagina": 1
+}
+```
+
+### Search Response
+
+```json
+{
+  "resultados": [
+    {
+      "id": "67890",
+      "slug": "spider-man-no-way-home",
+      "title": "Spider-Man: No Way Home",
+      "alt": "Spider-Man: No Way Home",
+      "image": "https://example.com/spiderman.jpg",
+      "year": "2021",
+      "language": "Latino",
+      "type": "movie"
+    }
+  ],
+  "seccion": "Busqueda",
+  "pagina": 1
+}
+```
+
+## Error Responses
+
+### Section Not Found
+
+```json
+{
+  "error": "Sección no encontrada"
+}
+```
+Status: `404 Not Found`
+
+### Failed to Fetch HTML
+
+```json
+{
+  "error": "No se pudo obtener HTML para la página."
+}
+```
+Status: `500 Internal Server Error`
+
+### Search Service Unavailable
+
+```json
+{
+  "error": "No se pudo obtener respuesta de búsqueda"
+}
+```
+Status: `503 Service Unavailable`
+
+## Notes
+
+- Section names are case-insensitive and accent-insensitive
+- Search uses the internal search API of the source website
+- Search results return page 1 only, regardless of the `pagina` parameter
+- The K-Drama section has a different URL structure for pagination
+- Browse results include more detailed metadata than search results

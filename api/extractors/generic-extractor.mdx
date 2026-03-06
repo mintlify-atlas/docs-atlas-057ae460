@@ -1,0 +1,255 @@
+---
+title: 'Generic Extractor'
+description: 'Extract movie and series listings and detailed information from HTML pages'
+---
+
+## Overview
+
+The Generic Extractor module provides functions to parse HTML content and extract structured data for movies and series. It handles lazy-loaded images, metadata extraction, and robust fallback mechanisms.
+
+## Functions
+
+### extraer_listado
+
+Extracts a list of movies or series from an HTML page containing article listings.
+
+#### Signature
+
+```python
+def extraer_listado(html: str) -> list[dict]
+```
+
+#### Parameters
+
+<ParamField path="html" type="string" required>
+  The HTML content to parse, typically from a listing or catalog page
+</ParamField>
+
+#### Returns
+
+Returns a list of dictionaries, where each dictionary contains:
+
+<ResponseField name="id" type="string">
+  The post ID from the `data-id` attribute
+</ResponseField>
+
+<ResponseField name="slug" type="string">
+  The URL slug extracted from the article link
+</ResponseField>
+
+<ResponseField name="titulo" type="string">
+  The title of the movie or series
+</ResponseField>
+
+<ResponseField name="alt" type="string">
+  The alt text from the poster image
+</ResponseField>
+
+<ResponseField name="imagen" type="string">
+  The poster image URL (handles lazy-loading)
+</ResponseField>
+
+<ResponseField name="year" type="string">
+  The release year
+</ResponseField>
+
+<ResponseField name="generos" type="string">
+  The genres as a string
+</ResponseField>
+
+<ResponseField name="idioma" type="string">
+  The language (e.g., "Latino", "Otro")
+</ResponseField>
+
+<ResponseField name="tipo" type="string">
+  The content type: "pelicula" or "serie"
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The full URL to the content page
+</ResponseField>
+
+#### Example
+
+```python
+from backend.extractors.generic_extractor import extraer_listado
+
+html_content = """
+<article class="item movies" data-id="12345">
+    <div class="poster">
+        <a href="https://example.com/movie/avengers-endgame/">
+            <img data-src="https://example.com/poster.jpg" alt="Avengers Endgame" />
+            <h3>Avengers: Endgame</h3>
+        </a>
+        <div class="data">
+            <p>2019</p>
+            <span>Action, Adventure, Sci-Fi</span>
+        </div>
+        <div class="audio">
+            <span class="latino">Latino</span>
+        </div>
+    </div>
+</article>
+"""
+
+resultado = extraer_listado(html_content)
+print(resultado)
+# Output:
+# [{
+#     'id': '12345',
+#     'slug': 'avengers-endgame',
+#     'titulo': 'Avengers: Endgame',
+#     'alt': 'Avengers Endgame',
+#     'imagen': 'https://example.com/poster.jpg',
+#     'year': '2019',
+#     'generos': 'Action, Adventure, Sci-Fi',
+#     'idioma': 'Latino',
+#     'tipo': 'pelicula',
+#     'url': 'https://example.com/movie/avengers-endgame/'
+# }]
+```
+
+#### Implementation Details
+
+- **Lazy Loading Handling**: The function prioritizes `data-srcset`, `data-src`, and `data-lazy-src` attributes over `src` to avoid placeholder images
+- **Fallback Mechanism**: If a placeholder image is detected (containing `data:image`), it searches for a `<noscript>` tag with the actual image
+- **Content Type Detection**: Determines if content is a movie or series based on CSS classes (`movies` or `tvshows`)
+- **Error Handling**: Catches and logs parsing errors for individual articles without stopping the entire extraction
+
+---
+
+### extraer_info_pelicula
+
+Extracts detailed information about a specific movie from its detail page.
+
+#### Signature
+
+```python
+def extraer_info_pelicula(html: str) -> dict
+```
+
+#### Parameters
+
+<ParamField path="html" type="string" required>
+  The HTML content of a movie detail page
+</ParamField>
+
+#### Returns
+
+Returns a dictionary containing:
+
+<ResponseField name="titulo" type="string">
+  The movie title
+</ResponseField>
+
+<ResponseField name="sinopsis" type="string">
+  The movie synopsis/description
+</ResponseField>
+
+<ResponseField name="fecha_estreno" type="string">
+  The release date
+</ResponseField>
+
+<ResponseField name="generos" type="list">
+  A list of genre names
+</ResponseField>
+
+<ResponseField name="imagen_poster" type="string">
+  The poster image URL with multiple fallback options
+</ResponseField>
+
+#### Example
+
+```python
+from backend.extractors.generic_extractor import extraer_info_pelicula
+
+html_content = """
+<div class="data">
+    <h1>The Matrix</h1>
+</div>
+<div itemprop="description">
+    <p>A computer hacker learns about the true nature of reality...</p>
+</div>
+<span itemprop="dateCreated">March 31, 1999</span>
+<div class="sgeneros">
+    <a href="/genre/action/">Action</a>
+    <a href="/genre/sci-fi/">Sci-Fi</a>
+</div>
+<div class="poster">
+    <img data-src="https://example.com/matrix-poster.jpg" />
+</div>
+<meta property="og:image" content="https://example.com/og-matrix.jpg" />
+"""
+
+info = extraer_info_pelicula(html_content)
+print(info)
+# Output:
+# {
+#     'titulo': 'The Matrix',
+#     'sinopsis': 'A computer hacker learns about the true nature of reality...',
+#     'fecha_estreno': 'March 31, 1999',
+#     'generos': ['Action', 'Sci-Fi'],
+#     'imagen_poster': 'https://example.com/matrix-poster.jpg'
+# }
+```
+
+#### Implementation Details
+
+- **Multi-level Image Fallback**:
+  1. Attempts to extract from lazy-loaded attributes (`data-src`, `data-lazy-src`)
+  2. Falls back to `<noscript>` tags if placeholder detected
+  3. Uses Open Graph (`og:image`) meta tags as secondary fallback
+  4. Uses Twitter Card (`twitter:image`) meta tags as final fallback
+- **Robust Element Selection**: Uses CSS selectors and attribute-based selection for reliable parsing
+- **Graceful Degradation**: Returns empty strings or lists when elements are not found
+
+---
+
+## Use Cases
+
+### Scraping Movie Catalogs
+
+Use `extraer_listado` to build a database of available movies and series from catalog pages:
+
+```python
+from backend.utils.http_client import fetch_html
+from backend.extractors.generic_extractor import extraer_listado
+
+html = fetch_html("https://example.com/movies/page/1/")
+listado = extraer_listado(html)
+
+for item in listado:
+    print(f"{item['titulo']} ({item['year']}) - {item['tipo']}")
+```
+
+### Getting Movie Details
+
+Use `extraer_info_pelicula` to fetch complete information about a specific movie:
+
+```python
+from backend.utils.http_client import fetch_html
+from backend.extractors.generic_extractor import extraer_info_pelicula
+
+html = fetch_html("https://example.com/movie/inception/")
+info = extraer_info_pelicula(html)
+
+print(f"Title: {info['titulo']}")
+print(f"Release: {info['fecha_estreno']}")
+print(f"Genres: {', '.join(info['generos'])}")
+print(f"Synopsis: {info['sinopsis']}")
+```
+
+## Dependencies
+
+- **BeautifulSoup4**: HTML parsing library
+
+## Error Handling
+
+Both functions include error handling mechanisms:
+
+- `extraer_listado`: Catches exceptions during article parsing and continues processing remaining articles
+- `extraer_info_pelicula`: Returns default values (empty strings, empty lists) when elements are missing
+
+<Warning>
+  Always validate the extracted data before storing or displaying it. Some websites may have inconsistent HTML structure that could result in incomplete data.
+</Warning>

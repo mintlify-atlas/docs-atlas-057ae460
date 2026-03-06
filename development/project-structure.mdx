@@ -1,0 +1,268 @@
+---
+title: 'Project Structure'
+description: 'Detailed overview of the Web Scraping Hub project organization and architecture'
+icon: 'folder-tree'
+---
+
+## Overview
+
+Web Scraping Hub is organized as a monorepo with separate backend (Flask/Python) and frontend (React/TypeScript) applications, along with Docker configuration for deployment.
+
+## Directory Structure
+
+```
+Web-Scrapping/
+├── backend/                  # Flask API server
+│   ├── app.py               # Main Flask application
+│   ├── config.py            # Configuration and settings
+│   ├── main.py              # Entry point for running the app
+│   ├── requirements.txt     # Python dependencies
+│   ├── extractors/          # Web scraping extractors
+│   │   ├── __init__.py
+│   │   ├── generic_extractor.py    # General content extraction
+│   │   ├── serie_extractor.py      # Series/episodes extraction
+│   │   └── iframe_extractor.py     # Video player iframe extraction
+│   ├── utils/               # Utility modules
+│   │   ├── __init__.py
+│   │   ├── http_client.py   # HTTP client with cloudscraper
+│   │   ├── adblocker.py     # Ad blocking functionality
+│   │   ├── parser.py        # HTML parsing utilities
+│   │   └── easylist.txt     # Ad blocking rules
+│   └── tests/               # Backend test suite
+│       ├── test_api.py              # API endpoint tests
+│       ├── test_api_real.py         # Real API integration tests
+│       ├── test_extractors.py       # Extractor unit tests
+│       └── test_lazy_images.py      # Lazy loading image tests
+│
+├── frontend/                # React frontend application
+│   └── project/             # Main React project
+│       ├── src/
+│       │   ├── App.tsx              # Main application component
+│       │   ├── main.tsx             # Application entry point
+│       │   ├── index.css            # Global styles
+│       │   ├── components/          # Reusable React components
+│       │   ├── pages/               # Page-level components
+│       │   ├── hooks/               # Custom React hooks (organized by domain)
+│       │   │   ├── api/             # API-related hooks
+│       │   │   ├── ui/              # UI state management hooks
+│       │   │   └── utils/           # Utility hooks
+│       │   └── types/               # TypeScript type definitions
+│       ├── public/                  # Static assets
+│       ├── package.json             # Node dependencies
+│       ├── vite.config.ts           # Vite configuration
+│       ├── tailwind.config.js       # TailwindCSS configuration
+│       ├── tsconfig.json            # TypeScript configuration
+│       └── eslint.config.js         # ESLint configuration
+│
+├── docker/                  # Docker deployment configuration
+│   ├── Dockerfile           # Multi-arch container image
+│   ├── docker-compose.yml   # Docker Compose configuration
+│   └── .dockerignore        # Docker build exclusions
+│
+├── docs/                    # Project documentation (internal)
+│   ├── imgs/                # Documentation images
+│   ├── Arquitectura-del-sistema.md
+│   └── MainFile.md
+│
+├── scripts/                 # Deployment and utility scripts
+│   └── deploy_casaos.ps1    # CasaOS deployment script
+│
+├── README.md                # Main project documentation
+├── README_CASAOS.md         # CasaOS-specific documentation
+├── LICENSE                  # MIT License
+├── Changes                  # Version changelog
+├── CurrentVersion           # Current version number
+└── .gitignore              # Git exclusions
+```
+
+## Backend Architecture
+
+### Core Application (`backend/app.py`)
+
+The main Flask application that handles:
+- API routing and endpoints
+- CORS configuration
+- Request/response handling
+- Integration with extractors
+
+Key endpoints:
+- `/api/listado` - Get catalog listing with pagination
+- `/api/pelicula/<slug>` - Get movie details
+- `/api/serie/<slug>` - Get series details and episodes
+- `/api/anime/<slug>` - Get anime details
+- `/api/video/<slug>` - Get video player information
+- `/api/version` - Check for updates
+
+### Configuration (`backend/config.py`)
+
+Centralized configuration including:
+- Application version (`APP_VERSION`)
+- Base scraping URL (`BASE_URL`)
+- Target sections and URLs (`TARGET_URLS`)
+- GitHub update URLs
+
+```python
+TARGET_URLS = [
+    {"nombre": "Películas", "url": f"{BASE_URL}/peliculas"},
+    {"nombre": "Series", "url": f"{BASE_URL}/series"},
+    {"nombre": "Anime", "url": f"{BASE_URL}/animes"},
+    # ... more sections
+]
+```
+
+### Extractors (`backend/extractors/`)
+
+Modular extraction system:
+
+#### `generic_extractor.py`
+- `extraer_listado(html)` - Extracts catalog listings from HTML
+- `extraer_info_pelicula(html)` - Extracts movie/media details
+- Handles lazy-loaded images
+- Parses metadata (genres, year, synopsis)
+
+#### `serie_extractor.py`
+- `extraer_episodios_serie(url)` - Extracts series episodes by season
+- Handles multi-season navigation
+- Parses episode metadata
+
+#### `iframe_extractor.py`
+- `extraer_iframe_reproductor(html)` - Extracts video player iframes
+- Handles various video hosting services
+
+### Utilities (`backend/utils/`)
+
+#### `http_client.py`
+HTTP client with Cloudflare bypass:
+```python
+import cloudscraper
+
+_scraper = cloudscraper.create_scraper()
+
+def fetch_html(url: str) -> str:
+    """Fetch HTML with Cloudflare bypass"""
+    
+def fetch_json(url: str) -> dict:
+    """Fetch JSON data"""
+```
+
+#### `adblocker.py`
+Ad blocking using EasyList rules
+
+#### `parser.py`
+HTML parsing utilities using BeautifulSoup
+
+## Frontend Architecture
+
+### Modular Hooks Structure
+
+Hooks are organized by domain for better maintainability:
+
+**`hooks/api/`** - API interaction hooks
+- Catalog fetching
+- Search functionality
+- Media details retrieval
+
+**`hooks/ui/`** - UI state management
+- Modal state
+- Pagination state
+- Navigation state
+
+**`hooks/utils/`** - Utility hooks
+- `useDebounce` - Debounced values
+- `useLocalStorage` - Persistent state
+
+### Component Organization
+
+**`components/`** - Reusable UI components
+- Media cards
+- Video player
+- Navigation controls
+- Search bar
+
+**`pages/`** - Page-level components
+- Home/catalog page
+- Detail pages
+- Player page
+
+## Docker Configuration
+
+### Multi-Architecture Support
+
+The `Dockerfile` supports:
+- AMD64 (x86_64)
+- ARM64 (aarch64)
+- ARMv7 (32-bit ARM)
+
+Builds native dependencies for each architecture using Alpine Linux.
+
+### Docker Compose
+
+Provides orchestration for:
+- Backend service (Flask)
+- Frontend service (Nginx serving built React app)
+- Volume management
+- Network configuration
+
+## Technology Stack
+
+### Backend
+- **Flask** - Web framework
+- **cloudscraper** - Cloudflare bypass
+- **BeautifulSoup4** - HTML parsing
+- **pytest** / **unittest** - Testing
+- **Flask-CORS** - Cross-origin support
+
+### Frontend
+- **React 18** - UI framework
+- **TypeScript** - Type safety
+- **Vite** - Build tool and dev server
+- **TailwindCSS** - Utility-first CSS
+- **ESLint** - Code linting
+
+### DevOps
+- **Docker** - Containerization
+- **Docker Compose** - Multi-container orchestration
+- **Git** - Version control
+
+## Key Features Implementation
+
+### Cloudflare Bypass
+Implemented in `backend/utils/http_client.py` using `cloudscraper` for reliable scraping.
+
+### Lazy Image Loading
+Handled in extractors with fallback strategies:
+1. Check `data-src` attribute
+2. Check `data-lazy-src` attribute
+3. Fall back to `noscript` tag
+4. Use OpenGraph image as last resort
+
+### Clean URL Routing
+Frontend uses `/page/N` instead of query parameters for pagination.
+
+### Modular Extractors
+Each extractor is independent and can be extended or replaced without affecting others.
+
+<Tip>
+  When adding new features, follow the existing directory structure and naming conventions to maintain consistency.
+</Tip>
+
+## Configuration Files
+
+| File | Purpose |
+|------|--------|
+| `backend/requirements.txt` | Python dependencies |
+| `frontend/project/package.json` | Node.js dependencies |
+| `frontend/project/tsconfig.json` | TypeScript compiler options |
+| `frontend/project/vite.config.ts` | Vite build configuration |
+| `frontend/project/tailwind.config.js` | TailwindCSS customization |
+| `docker/docker-compose.yml` | Container orchestration |
+| `.gitignore` | Git exclusions |
+
+## Version Management
+
+Version is stored in:
+- `backend/config.py` - `APP_VERSION` variable
+- `CurrentVersion` - File for update checking
+- `Changes` - Changelog file
+
+The app includes automatic update checking against GitHub repository.

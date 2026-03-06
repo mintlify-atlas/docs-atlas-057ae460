@@ -1,0 +1,229 @@
+---
+title: 'Get Anime'
+api: 'GET /api/anime/{slug}'
+description: 'Get detailed information about an anime series, including all episodes'
+---
+
+## Endpoint
+
+```
+GET /api/anime/{slug}
+```
+
+## Description
+
+Retrieve comprehensive information about an anime series, including metadata, episode listings organized by season, and streaming URLs. This endpoint is specifically for anime series (not anime movies - use `/api/pelicula` for those).
+
+## Path Parameters
+
+<ParamField path="slug" type="string" required>
+  The unique slug identifier for the anime (obtained from `/api/listado` or search results)
+</ParamField>
+
+## Response
+
+<ResponseField name="slug" type="string" required>
+  The anime slug identifier
+</ResponseField>
+
+<ResponseField name="info" type="object" required>
+  Anime metadata and information
+  
+  <Expandable title="Info properties">
+    <ResponseField name="titulo" type="string">
+      Full title of the anime
+    </ResponseField>
+    
+    <ResponseField name="sinopsis" type="string">
+      Plot synopsis/description
+    </ResponseField>
+    
+    <ResponseField name="generos" type="array">
+      Array of genre strings
+    </ResponseField>
+    
+    <ResponseField name="imagen_poster" type="string">
+      URL of the poster image
+    </ResponseField>
+    
+    <ResponseField name="fecha_estreno" type="string">
+      Release date (extracted from first episode)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="temporadas" type="object" required>
+  Episodes organized by season number (keys are season numbers as strings)
+  
+  <Expandable title="Season structure">
+    Each season is an array of episode objects:
+    
+    <ResponseField name="temporada" type="integer">
+      Season number
+    </ResponseField>
+    
+    <ResponseField name="episodio" type="integer">
+      Episode number within the season
+    </ResponseField>
+    
+    <ResponseField name="titulo" type="string">
+      Episode title
+    </ResponseField>
+    
+    <ResponseField name="fecha" type="string">
+      Episode release date
+    </ResponseField>
+    
+    <ResponseField name="imagen" type="string">
+      URL of the episode thumbnail
+    </ResponseField>
+    
+    <ResponseField name="url" type="string">
+      Full URL to the episode page (use with `/api/iframe_player`)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the anime is not found
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:1234/api/anime/attack-on-titan
+```
+
+```javascript JavaScript
+fetch('http://localhost:1234/api/anime/attack-on-titan')
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get('http://localhost:1234/api/anime/attack-on-titan')
+data = response.json()
+print(data)
+```
+</CodeGroup>
+
+## Example Response
+
+### Success Response
+
+```json
+{
+  "slug": "attack-on-titan",
+  "info": {
+    "titulo": "Attack on Titan",
+    "sinopsis": "After his hometown is destroyed and his mother is killed, young Eren Jaeger vows to cleanse the earth of the giant humanoid Titans that have brought humanity to the brink of extinction.",
+    "generos": ["Action", "Adventure", "Animation", "Drama", "Fantasy"],
+    "imagen_poster": "https://example.com/aot-poster.jpg",
+    "fecha_estreno": "2013-04-07"
+  },
+  "temporadas": {
+    "1": [
+      {
+        "temporada": 1,
+        "episodio": 1,
+        "titulo": "To You, in 2000 Years: The Fall of Shiganshina, Part 1",
+        "fecha": "2013-04-07",
+        "imagen": "https://example.com/ep1-thumb.jpg",
+        "url": "https://sololatino.net/animes/attack-on-titan/temporada-1/episodio-1"
+      },
+      {
+        "temporada": 1,
+        "episodio": 2,
+        "titulo": "That Day: The Fall of Shiganshina, Part 2",
+        "fecha": "2013-04-14",
+        "imagen": "https://example.com/ep2-thumb.jpg",
+        "url": "https://sololatino.net/animes/attack-on-titan/temporada-1/episodio-2"
+      }
+    ],
+    "2": [
+      {
+        "temporada": 2,
+        "episodio": 1,
+        "titulo": "Beast Titan",
+        "fecha": "2017-04-01",
+        "imagen": "https://example.com/s2e1-thumb.jpg",
+        "url": "https://sololatino.net/animes/attack-on-titan/temporada-2/episodio-1"
+      }
+    ]
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "error": "Anime no encontrado"
+}
+```
+Status: `404 Not Found`
+
+## Anime vs Serie Endpoints
+
+<Note>
+Both `/api/anime/{slug}` and `/api/serie/{slug}` use the same underlying extraction logic and return the same response structure. The difference is:
+
+- **`/api/serie/{slug}`**: Searches Series section first, then Anime section
+- **`/api/anime/{slug}`**: Searches only the Anime section
+
+For anime content, either endpoint will work, but `/api/anime/{slug}` is more efficient as it doesn't search the Series section first.
+</Note>
+
+## Anime Movies vs Anime Series
+
+- **Anime Series** (multi-episode): Use `/api/anime/{slug}` (this endpoint)
+- **Anime Movies** (single films): Use `/api/pelicula/{slug}`
+
+Anime movies are stored in the "Peliculas de Anime" section and return player information instead of episode listings.
+
+## Using Episode URLs
+
+To get the video player for a specific episode, use the episode's `url` field with the `/api/iframe_player` endpoint:
+
+```bash
+curl "http://localhost:1234/api/iframe_player?url=https://sololatino.net/animes/attack-on-titan/temporada-1/episodio-1"
+```
+
+## Season Organization
+
+Episodes are grouped by season in the `temporadas` object:
+- Keys are season numbers as strings ("1", "2", "3", etc.)
+- Values are arrays of episode objects
+- Episodes within each season are ordered by episode number
+- Anime typically uses "seasons" to represent different cours or parts
+
+## Common Anime Genres
+
+Anime content typically includes these genres:
+- Action
+- Adventure
+- Animation
+- Comedy
+- Drama
+- Fantasy
+- Horror
+- Mecha
+- Mystery
+- Psychological
+- Romance
+- Sci-Fi
+- Seinen
+- Shonen
+- Slice of Life
+- Supernatural
+
+## Image Handling
+
+The endpoint handles various image loading strategies:
+- Extracts from lazy-loaded images
+- Falls back to `<noscript>` tags when needed
+- Uses OpenGraph meta tags as final fallback
+- Returns empty strings if no image is available

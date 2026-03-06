@@ -1,0 +1,524 @@
+---
+title: 'Testing Guide'
+description: 'Running tests, test structure, and writing tests for Web Scraping Hub'
+icon: 'flask-vial'
+---
+
+## Overview
+
+Web Scraping Hub includes a comprehensive test suite for the backend API and extractors. Tests are written using Python's `unittest` framework and can also be run with `pytest`.
+
+## Test Location
+
+All backend tests are located in:
+```
+backend/tests/
+├── test_api.py           # API endpoint tests with mocking
+├── test_api_real.py      # Real API integration tests
+├── test_extractors.py    # Extractor unit tests
+└── test_lazy_images.py   # Lazy image loading tests
+```
+
+## Running Tests
+
+### Prerequisites
+
+Ensure you have the development environment set up:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### Run All Tests
+
+#### Using pytest (Recommended)
+
+```bash
+cd backend
+pytest tests/
+```
+
+With verbose output:
+```bash
+pytest tests/ -v
+```
+
+With coverage report:
+```bash
+pytest tests/ --cov=backend --cov-report=html
+```
+
+#### Using unittest
+
+```bash
+cd backend
+python -m unittest discover tests
+```
+
+Run with verbose output:
+```bash
+python -m unittest discover tests -v
+```
+
+### Run Specific Test Files
+
+```bash
+# Run only API tests
+pytest tests/test_api.py
+
+# Run only extractor tests
+pytest tests/test_extractors.py
+
+# Run only lazy image tests
+pytest tests/test_lazy_images.py
+```
+
+### Run Specific Test Cases
+
+```bash
+# Run a specific test class
+pytest tests/test_api.py::TestAPIListado
+
+# Run a specific test method
+pytest tests/test_api.py::TestAPIListado::test_busqueda_exitosa
+```
+
+## Test Structure
+
+### API Tests (`test_api.py`)
+
+Tests Flask API endpoints using mocked responses:
+
+```python
+import unittest
+from unittest.mock import patch
+from backend.app import app
+
+class TestAPIListado(unittest.TestCase):
+    def setUp(self):
+        """Set up test client before each test"""
+        self.app = app.test_client()
+        self.app.testing = True
+
+    @patch('backend.app.fetch_json')
+    def test_busqueda_exitosa(self, mock_fetch_json):
+        """Test successful search functionality"""
+        # Mock the external API response
+        mock_fetch_json.return_value = {
+            "123": {
+                "title": "Pelicula de Prueba",
+                "url": "https://sololatino.net/peliculas/prueba-slug",
+                "img": "img.jpg",
+                "type": "pelicula",
+                "extra": {"date": "2023"}
+            }
+        }
+        
+        # Make request
+        response = self.app.get('/api/listado?busqueda=prueba')
+        data = response.get_json()
+        
+        # Assertions
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data['seccion'], 'Busqueda')
+        self.assertEqual(len(data['resultados']), 1)
+```
+
+**Key test cases:**
+- ✅ `test_busqueda_exitosa` - Successful search results
+- ✅ `test_listado_seccion_exitosa` - Section listing with pagination
+- ✅ `test_seccion_no_encontrada` - 404 error handling
+
+### Extractor Tests (`test_extractors.py`)
+
+Unit tests for HTML parsing and extraction logic:
+
+```python
+import unittest
+from extractors.generic_extractor import extraer_listado, extraer_info_pelicula
+
+class TestExtractors(unittest.TestCase):
+    
+    def test_extraer_listado(self):
+        """Test catalog listing extraction"""
+        html_dummy = """
+        <article class="item movies" data-id="123">
+            <div class="poster">
+                <img src="img.jpg" alt="Pelicula Prueba">
+                <div class="data">
+                    <h3>Pelicula Prueba</h3>
+                    <p>2023</p>
+                </div>
+                <a href="https://sololatino.net/peliculas/prueba-slug"></a>
+            </div>
+        </article>
+        """
+        resultados = extraer_listado(html_dummy)
+        
+        self.assertEqual(len(resultados), 1)
+        self.assertEqual(resultados[0]['titulo'], 'Pelicula Prueba')
+        self.assertEqual(resultados[0]['slug'], 'prueba-slug')
+        self.assertEqual(resultados[0]['year'], '2023')
+```
+
+**Key test cases:**
+- ✅ `test_extraer_listado` - Catalog item extraction
+- ✅ `test_extraer_info_pelicula` - Movie detail extraction
+- Validates: title, slug, year, type, synopsis, genres, images
+
+### Lazy Image Tests (`test_lazy_images.py`)
+
+Tests for handling lazy-loaded images with various fallback strategies:
+
+```python
+import unittest
+from extractors.generic_extractor import extraer_listado
+
+class TestLazyImages(unittest.TestCase):
+    
+    PLACEHOLDER = "data:image/gif;base64,R0lGODdhAQABAPAAAMPDwwAAACwAAAAAAQABAAACAkQBADs="
+
+    def test_generic_listado_lazy_image(self):
+        """Test data-src attribute extraction"""
+        html = f"""
+        <article class="item movies">
+            <div class="poster">
+                <img src="{self.PLACEHOLDER}" 
+                     data-src="https://real-image.com/poster.jpg" 
+                     alt="Test">
+                <a href="/peliculas/test"></a>
+            </div>
+        </article>
+        """
+        resultados = extraer_listado(html)
+        img = resultados[0]['imagen']
+        
+        # Should extract real image, not placeholder
+        self.assertNotEqual(img, self.PLACEHOLDER)
+        self.assertEqual(img, "https://real-image.com/poster.jpg")
+```
+
+**Key test cases:**
+- ✅ `test_generic_listado_lazy_image` - data-src extraction
+- ✅ `test_generic_listado_noscript_fallback` - noscript fallback
+- ✅ `test_generic_info_lazy_image` - data-lazy-src extraction
+- ✅ `test_generic_info_og_fallback` - OpenGraph fallback
+- ✅ `test_serie_lazy_image` - Series image extraction
+
+### Real API Tests (`test_api_real.py`)
+
+Integration tests that make actual HTTP requests to the target website. These tests:
+- Verify real-world scraping functionality
+- Test Cloudflare bypass
+- Validate actual HTML structure
+- May be slower and require internet connection
+
+<Warning>
+  Real API tests depend on external websites and may fail if the target site changes structure or is unavailable.
+</Warning>
+
+## Writing New Tests
+
+### Test Structure Template
+
+```python
+import sys
+import os
+import unittest
+from unittest.mock import patch, MagicMock
+
+# Add backend to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend.app import app
+from backend.extractors.generic_extractor import extraer_listado
+
+class TestNewFeature(unittest.TestCase):
+    
+    def setUp(self):
+        """Set up test fixtures before each test"""
+        self.app = app.test_client()
+        self.app.testing = True
+    
+    def tearDown(self):
+        """Clean up after each test"""
+        pass
+    
+    def test_feature_success(self):
+        """Test successful feature execution"""
+        # Arrange
+        expected_result = "success"
+        
+        # Act
+        result = some_function()
+        
+        # Assert
+        self.assertEqual(result, expected_result)
+    
+    def test_feature_failure(self):
+        """Test feature error handling"""
+        with self.assertRaises(ValueError):
+            some_function(invalid_input)
+
+if __name__ == '__main__':
+    unittest.main()
+```
+
+### Testing Best Practices
+
+#### 1. Use Descriptive Test Names
+
+```python
+# Good
+def test_extraer_listado_returns_empty_list_for_invalid_html(self):
+    pass
+
+# Bad
+def test_extractor(self):
+    pass
+```
+
+#### 2. Follow AAA Pattern
+
+```python
+def test_example(self):
+    # Arrange - Set up test data
+    html = "<div>test</div>"
+    
+    # Act - Execute the function
+    result = parse_html(html)
+    
+    # Assert - Verify the outcome
+    self.assertEqual(result, expected)
+```
+
+#### 3. Mock External Dependencies
+
+```python
+@patch('backend.utils.http_client.fetch_html')
+def test_with_mock(self, mock_fetch):
+    mock_fetch.return_value = "<html>mocked</html>"
+    result = function_that_uses_fetch()
+    self.assertTrue(mock_fetch.called)
+```
+
+#### 4. Test Edge Cases
+
+```python
+def test_empty_input(self):
+    """Test behavior with empty input"""
+    result = extraer_listado("")
+    self.assertEqual(result, [])
+
+def test_malformed_html(self):
+    """Test handling of malformed HTML"""
+    result = extraer_listado("<div>unclosed")
+    self.assertIsNotNone(result)
+```
+
+#### 5. Use setUp and tearDown
+
+```python
+class TestWithSetup(unittest.TestCase):
+    
+    def setUp(self):
+        """Run before each test"""
+        self.test_data = load_test_data()
+    
+    def tearDown(self):
+        """Run after each test"""
+        cleanup_test_data()
+```
+
+## Test Coverage
+
+Generate a coverage report:
+
+```bash
+pytest tests/ --cov=backend --cov-report=html
+```
+
+View the report:
+```bash
+open htmlcov/index.html  # macOS
+xdg-open htmlcov/index.html  # Linux
+start htmlcov/index.html  # Windows
+```
+
+### Current Coverage Areas
+
+- ✅ API endpoints (`/api/listado`, `/api/pelicula/*`, `/api/serie/*`)
+- ✅ Generic extractor (listings, details)
+- ✅ Serie extractor (episodes, seasons)
+- ✅ Lazy image loading (multiple fallback strategies)
+- ✅ Error handling (404s, invalid sections)
+
+### Areas for Improvement
+
+- ⚠️ Frontend component testing (consider adding Jest/Vitest)
+- ⚠️ iframe extractor tests
+- ⚠️ Integration tests for complete workflows
+- ⚠️ Performance/load testing
+
+## Continuous Testing
+
+### Watch Mode
+
+Run tests automatically on file changes:
+
+```bash
+pytest tests/ --watch
+```
+
+Or use `pytest-watch`:
+```bash
+pip install pytest-watch
+ptw tests/
+```
+
+### Pre-commit Hook
+
+Create `.git/hooks/pre-commit`:
+
+```bash
+#!/bin/bash
+cd backend
+python -m pytest tests/
+if [ $? -ne 0 ]; then
+    echo "Tests failed. Commit aborted."
+    exit 1
+fi
+```
+
+Make it executable:
+```bash
+chmod +x .git/hooks/pre-commit
+```
+
+## Debugging Tests
+
+### Print Debug Output
+
+```bash
+pytest tests/ -s  # Don't capture stdout
+```
+
+### Run Specific Test with Debugging
+
+```python
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
+```
+
+### Use pdb for Interactive Debugging
+
+```python
+import pdb
+
+def test_with_debugger(self):
+    result = some_function()
+    pdb.set_trace()  # Debugger will pause here
+    self.assertEqual(result, expected)
+```
+
+## Test Data
+
+### Sample HTML Fixtures
+
+Create reusable test fixtures:
+
+```python
+# tests/fixtures.py
+SAMPLE_LISTING_HTML = """
+<article class="item movies" data-id="123">
+    <div class="poster">
+        <img src="image.jpg" alt="Movie Title">
+        <div class="data">
+            <h3>Movie Title</h3>
+            <p>2023</p>
+        </div>
+        <a href="/peliculas/movie-slug"></a>
+    </div>
+</article>
+"""
+
+# tests/test_extractors.py
+from tests.fixtures import SAMPLE_LISTING_HTML
+
+def test_with_fixture(self):
+    result = extraer_listado(SAMPLE_LISTING_HTML)
+    self.assertEqual(len(result), 1)
+```
+
+## Common Test Scenarios
+
+### Testing API Endpoints
+
+```python
+def test_api_endpoint(self):
+    response = self.app.get('/api/listado?seccion=Peliculas&pagina=1')
+    self.assertEqual(response.status_code, 200)
+    data = response.get_json()
+    self.assertIn('resultados', data)
+    self.assertIsInstance(data['resultados'], list)
+```
+
+### Testing Extractors
+
+```python
+def test_extractor_returns_correct_structure(self):
+    html = "<html>...</html>"
+    result = extraer_listado(html)
+    
+    self.assertIsInstance(result, list)
+    if result:
+        item = result[0]
+        self.assertIn('titulo', item)
+        self.assertIn('slug', item)
+        self.assertIn('imagen', item)
+```
+
+### Testing Error Handling
+
+```python
+def test_invalid_section_returns_404(self):
+    response = self.app.get('/api/listado?seccion=InvalidSection')
+    self.assertEqual(response.status_code, 404)
+    data = response.get_json()
+    self.assertIn('error', data)
+```
+
+<Tip>
+  Always run tests before committing changes to ensure you haven't broken existing functionality.
+</Tip>
+
+## Frontend Testing
+
+While the current test suite focuses on backend, you can add frontend tests:
+
+```bash
+cd frontend/project
+npm install --save-dev vitest @testing-library/react
+```
+
+Create `frontend/project/src/tests/App.test.tsx`:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import App from '../App'
+
+describe('App', () => {
+  it('renders without crashing', () => {
+    render(<App />)
+    expect(screen.getByText(/Web Scraping Hub/i)).toBeInTheDocument()
+  })
+})
+```
+
+<Note>
+  Frontend testing infrastructure is not yet fully configured. This is a good area for contribution!
+</Note>

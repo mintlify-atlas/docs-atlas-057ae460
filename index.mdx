@@ -1,97 +1,77 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Welcome to Web Scrapping Hub"
+description: "Full-stack streaming application for movies, series, and anime with powerful web scraping capabilities"
 ---
 
-## Setting up
+<img
+  className="block"
+  src="/logo.png"
+  alt="Web Scrapping Hub"
+  style={{ width: "120px", marginBottom: "2rem" }}
+/>
 
-Get your documentation site up and running in minutes.
+# Web Scrapping Hub
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+**Web Scrapping Hub** is a full-stack streaming application built with Flask and React that provides a modern interface for browsing and watching movies, series, and anime. Powered by robust web scraping technology, it bypasses Cloudflare protection and delivers content seamlessly.
 
-## Make it yours
+## Key Features
 
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Catalog Browsing" icon="grid-2" href="/features/catalog-browsing">
+    Browse extensive catalogs of movies, series, and anime with clean pagination
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Advanced Search" icon="magnifying-glass" href="/features/search">
+    Find content quickly with search and deep search functionality
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Video Player" icon="play" href="/features/video-player">
+    Watch content with an integrated player featuring episode navigation
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Web Scraping" icon="spider-web" href="/features/web-scraping">
+    Cloudflare bypass with cloudscraper and modular extractor system
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Getting Started
 
-Everything you need to create world-class documentation.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in minutes with our quickstart guide
+  </Card>
+  <Card title="Introduction" icon="book-open" href="/introduction">
+    Learn about the architecture and key concepts
+  </Card>
+  <Card title="Local Setup" icon="laptop-code" href="/installation/local-setup">
+    Install and run locally for development
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/installation/docker-deployment">
+    Deploy with Docker for production use
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Technology Stack
 
-## Need inspiration?
+Built with modern technologies for performance and scalability:
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+- **Backend**: Flask (Python 3.11+) with RESTful API
+- **Frontend**: React 18 + Vite + TailwindCSS
+- **Scraping**: cloudscraper with BeautifulSoup4
+- **Deployment**: Docker with multi-architecture support (AMD64, ARM64, ARMv7)
+
+## API Reference
+
+Explore the full API to integrate with the backend or build custom clients.
+
+<CardGroup cols={2}>
+  <Card title="API Overview" icon="code" href="/api/overview">
+    Overview of all available endpoints
+  </Card>
+  <Card title="Endpoints" icon="brackets-curly" href="/api/version">
+    Detailed endpoint documentation
+  </Card>
+  <Card title="Extractors" icon="wrench" href="/api/extractors/generic-extractor">
+    Learn about the modular extractor system
+  </Card>
+  <Card title="Development" icon="hammer" href="/development/contributing">
+    Contribute to the project
+  </Card>
+</CardGroup>

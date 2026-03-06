@@ -1,0 +1,424 @@
+---
+title: React Router Setup
+description: React Router configuration and route structure
+---
+
+## Overview
+
+The application uses React Router v6 for client-side routing with lazy-loaded pages for optimal performance. All routing configuration is centralized in `App.tsx`.
+
+## Router Configuration
+
+### Base Setup
+
+**Location:** `src/App.tsx`
+
+```typescript
+import React, { Suspense, lazy } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
+
+// Lazy load pages for better performance
+const CatalogPage = lazy(() => import('./pages/CatalogPage'));
+const SeriesDetailPage = lazy(() => import('./pages/SeriesDetailPage'));
+const MovieDetailPage = lazy(() => import('./pages/MovieDetailPage'));
+const AnimeDetailPage = lazy(() => import('./pages/AnimeDetailPage'));
+const PlayerPage = lazy(() => import('./pages/PlayerPage'));
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <Router>
+          <Layout>
+            <Suspense fallback={<div className="text-center text-neon-cyan">Cargando...</div>}>
+              <Routes>
+                {/* Routes defined here */}
+              </Routes>
+            </Suspense>
+          </Layout>
+        </Router>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+}
+```
+
+## Route Structure
+
+### Main Routes
+
+```typescript
+<Routes>
+  {/* Root redirects to page 1 */}
+  <Route path="/" element={<Navigate to="/page/1" replace />} />
+  
+  {/* Catalog pagination */}
+  <Route path="/page/:pageNumber" element={<CatalogPage section="" />} />
+  
+  {/* Section-specific catalogs */}
+  <Route path="/peliculas" element={<CatalogPage section="Películas" />} />
+  <Route path="/series" element={<CatalogPage section="Series" />} />
+  
+  {/* Detail pages */}
+  <Route path="/series/:slug" element={<SeriesDetailPage />} />
+  <Route path="/movie/:slug" element={<MovieDetailPage />} />
+  <Route path="/anime/:slug" element={<AnimeDetailPage />} />
+  
+  {/* Player page */}
+  <Route path="/ver/:tipo/:slug" element={<PlayerPage />} />
+  
+  {/* Catch-all (commented out in production) */}
+  {/* <Route path="*" element={<Navigate to="/page/1" replace />} /> */}
+</Routes>
+```
+
+## Route Patterns
+
+### Catalog Routes
+
+**Paginated Catalog:**
+```typescript
+<Route path="/page/:pageNumber" element={<CatalogPage section="" />} />
+```
+- URL: `/page/1`, `/page/2`, etc.
+- Shows all content types
+- Dynamic page number from URL parameter
+
+**Section Catalogs:**
+```typescript
+<Route path="/peliculas" element={<CatalogPage section="Películas" />} />
+<Route path="/series" element={<CatalogPage section="Series" />} />
+```
+- URL: `/peliculas`, `/series`
+- Filters content by section
+- Section passed as prop to CatalogPage
+
+### Detail Routes
+
+**Series Detail:**
+```typescript
+<Route path="/series/:slug" element={<SeriesDetailPage />} />
+```
+- URL: `/series/breaking-bad`
+- Shows series information and episodes
+- Slug extracted from URL parameter
+
+**Movie Detail:**
+```typescript
+<Route path="/movie/:slug" element={<MovieDetailPage />} />
+```
+- URL: `/movie/inception`
+- Shows movie information and player
+- Slug extracted from URL parameter
+
+**Anime Detail:**
+```typescript
+<Route path="/anime/:slug" element={<AnimeDetailPage />} />
+```
+- URL: `/anime/one-piece`
+- Shows anime information and episodes
+- Slug extracted from URL parameter
+
+### Player Route
+
+```typescript
+<Route path="/ver/:tipo/:slug" element={<PlayerPage />} />
+```
+- URL: `/ver/serie/breaking-bad`, `/ver/pelicula/inception`
+- Dynamic content type (serie/pelicula/anime)
+- Dynamic content slug
+- Displays video player
+
+## Lazy Loading
+
+### Implementation
+
+Pages are lazy loaded using React's `lazy()` function:
+
+```typescript
+const CatalogPage = lazy(() => import('./pages/CatalogPage'));
+const SeriesDetailPage = lazy(() => import('./pages/SeriesDetailPage'));
+const MovieDetailPage = lazy(() => import('./pages/MovieDetailPage'));
+const AnimeDetailPage = lazy(() => import('./pages/AnimeDetailPage'));
+const PlayerPage = lazy(() => import('./pages/PlayerPage'));
+```
+
+### Suspense Fallback
+
+A loading indicator is shown while pages load:
+
+```typescript
+<Suspense fallback={
+  <div className="text-center text-neon-cyan text-glow-cyan py-10 bg-space-black">
+    Cargando...
+  </div>
+}>
+  <Routes>
+    {/* Routes */}
+  </Routes>
+</Suspense>
+```
+
+### Benefits
+
+1. **Faster Initial Load**: Only loads the current page's code
+2. **Code Splitting**: Each page is a separate bundle
+3. **Better Performance**: Reduces initial JavaScript bundle size
+4. **User Experience**: Shows loading state during page transitions
+
+## Navigation
+
+### NavLink Component
+
+The Layout component uses `NavLink` for active route styling:
+
+```typescript
+import { NavLink } from 'react-router-dom';
+
+const navigation = [
+  { name: 'Inicio', href: '/', icon: Home },
+  { name: 'Películas', href: '/peliculas', icon: Film },
+  { name: 'Series', href: '/series', icon: Clapperboard },
+];
+
+<NavLink
+  to={item.href}
+  end
+  className={({ isActive }) =>
+    `flex items-center space-x-1 px-3 py-2 rounded-md ` +
+    (isActive
+      ? 'border-b-2 border-neon-cyan text-neon-cyan text-glow-cyan'
+      : 'text-gray-light hover:text-neon-cyan')
+  }
+>
+  <Icon className="h-4 w-4" />
+  <span>{item.name}</span>
+</NavLink>
+```
+
+### Link Component
+
+For dynamic navigation (e.g., catalog items):
+
+```typescript
+import { Link } from 'react-router-dom';
+
+<Link
+  to={
+    item.type === 'series'
+      ? `/series/${item.slug}`
+      : item.type === 'anime'
+        ? `/anime/${item.slug}`
+        : `/movie/${item.slug}`
+  }
+  className="group block"
+>
+  {/* Content */}
+</Link>
+```
+
+### Navigate Component
+
+For programmatic redirects:
+
+```typescript
+import { Navigate } from 'react-router-dom';
+
+<Route path="/" element={<Navigate to="/page/1" replace />} />
+```
+
+## Route Parameters
+
+### Accessing Parameters
+
+Use the `useParams` hook to access URL parameters:
+
+```typescript
+import { useParams } from 'react-router-dom';
+
+function SeriesDetailPage() {
+  const { slug } = useParams<{ slug: string }>();
+  
+  const { data } = useSeriesDetail(slug || '');
+  
+  return (
+    // Component JSX
+  );
+}
+```
+
+### Multiple Parameters
+
+```typescript
+function PlayerPage() {
+  const { tipo, slug } = useParams<{ tipo: string; slug: string }>();
+  
+  // tipo can be 'serie', 'pelicula', or 'anime'
+  // slug is the content identifier
+  
+  return (
+    // Component JSX
+  );
+}
+```
+
+## Location State
+
+### Using useLocation
+
+Access current location information:
+
+```typescript
+import { useLocation } from 'react-router-dom';
+
+function Layout({ children }) {
+  const location = useLocation();
+  
+  // Dynamic styling based on route
+  let appNameColor = 'text-electric-sky';
+  if (location.pathname.startsWith('/anime/')) {
+    appNameColor = 'text-magenta-pink';
+  } else if (location.pathname.startsWith('/movie/')) {
+    appNameColor = 'text-fuchsia-pink';
+  }
+  
+  return (
+    // Layout JSX
+  );
+}
+```
+
+## Programmatic Navigation
+
+### useNavigate Hook
+
+Navigate programmatically in response to events:
+
+```typescript
+import { useNavigate } from 'react-router-dom';
+
+function CatalogPage() {
+  const navigate = useNavigate();
+  
+  const handlePageChange = (page: number) => {
+    navigate(`/page/${page}`);
+  };
+  
+  return (
+    <Pagination
+      currentPage={page}
+      totalPages={totalPages}
+      onPageChange={handlePageChange}
+    />
+  );
+}
+```
+
+## Route Guards
+
+While not implemented in the current app, route guards can be added:
+
+```typescript
+// Protected route wrapper
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAuth();
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return <>{children}</>;
+}
+
+// Usage
+<Route 
+  path="/admin" 
+  element={
+    <ProtectedRoute>
+      <AdminPage />
+    </ProtectedRoute>
+  } 
+/>
+```
+
+## Scroll Restoration
+
+React Router automatically handles scroll position. For custom behavior:
+
+```typescript
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  
+  return null;
+}
+
+// Add to App
+<Router>
+  <ScrollToTop />
+  {/* Rest of app */}
+</Router>
+```
+
+## Best Practices
+
+1. **Lazy Loading**: Use `React.lazy()` for all route components
+2. **Suspense Boundaries**: Always wrap lazy routes in `Suspense`
+3. **Error Boundaries**: Wrap routes in `ErrorBoundary` for error handling
+4. **Type Safety**: Use TypeScript generics with `useParams`
+5. **SEO**: Use descriptive slugs in URLs
+6. **Redirects**: Use `Navigate` component with `replace` prop for redirects
+7. **Active Links**: Use `NavLink` with `end` prop for exact matching
+8. **Route Organization**: Keep route definitions in one place (App.tsx)
+
+## Route Hierarchy
+
+```
+/
+├── /page/:pageNumber          (Paginated catalog)
+├── /peliculas                 (Movies catalog)
+├── /series                    (Series catalog)
+├── /series/:slug              (Series detail)
+├── /movie/:slug               (Movie detail)
+├── /anime/:slug               (Anime detail)
+└── /ver/:tipo/:slug           (Player)
+```
+
+## Adding New Routes
+
+To add a new route:
+
+1. Create the page component in `src/pages/`
+2. Lazy load it in `App.tsx`
+3. Add the route definition
+4. Update navigation if needed
+5. Test route parameters and navigation
+
+```typescript
+// 1. Create page
+// src/pages/NewPage.tsx
+export default function NewPage() {
+  return <div>New Page</div>;
+}
+
+// 2. Lazy load
+const NewPage = lazy(() => import('./pages/NewPage'));
+
+// 3. Add route
+<Route path="/new-page" element={<NewPage />} />
+
+// 4. Update navigation (if needed)
+const navigation = [
+  // ... existing items
+  { name: 'New', href: '/new-page', icon: NewIcon },
+];
+```

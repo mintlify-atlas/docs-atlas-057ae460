@@ -1,0 +1,225 @@
+---
+title: 'Contributing to Web Scraping Hub'
+description: 'Guidelines for contributing to the project, workflow, and pull request process'
+icon: 'code-pull-request'
+---
+
+## Welcome Contributors
+
+Contributions are welcome and appreciated! This guide will help you get started with contributing to the Web Scraping Hub project.
+
+## Getting Started
+
+Before you begin contributing, make sure you have:
+
+- Python 3.8 or higher installed
+- Node.js 18+ and npm
+- Git configured on your machine
+- A GitHub account
+- (Recommended) A Python virtual environment tool
+
+## Contribution Workflow
+
+<Steps>
+  <Step title="Fork the Repository">
+    Create your own fork of the repository on GitHub. This gives you a personal copy where you can make changes.
+    
+    ```bash
+    # Clone your fork
+    git clone <your-fork-url>
+    cd Web-Scrapping
+    ```
+  </Step>
+
+  <Step title="Create a Feature Branch">
+    Always create a new branch for your changes. Use descriptive names that indicate what you're working on.
+    
+    ```bash
+    git checkout -b feature/NuevaFeature
+    ```
+    
+    Branch naming conventions:
+    - `feature/` for new features
+    - `fix/` for bug fixes
+    - `docs/` for documentation updates
+    - `refactor/` for code refactoring
+  </Step>
+
+  <Step title="Set Up Development Environment">
+    Install dependencies for both backend and frontend:
+    
+    **Backend Setup:**
+    ```bash
+    cd backend
+    python3 -m venv .venv
+    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+    pip install -r requirements.txt
+    ```
+    
+    **Frontend Setup:**
+    ```bash
+    cd frontend/project
+    npm install
+    ```
+  </Step>
+
+  <Step title="Make Your Changes">
+    Implement your feature or fix. Follow the project's code style and organization:
+    
+    - Backend code follows Flask best practices
+    - Frontend uses React with TypeScript and TailwindCSS
+    - Keep extractors modular and focused
+    - Update tests if you modify existing functionality
+  </Step>
+
+  <Step title="Test Your Changes">
+    Run the test suite to ensure nothing is broken:
+    
+    ```bash
+    # Run backend tests
+    cd backend
+    pytest tests/
+    
+    # Or run with unittest
+    python -m unittest discover tests
+    ```
+    
+    See the [Testing](/development/testing) guide for more details.
+  </Step>
+
+  <Step title="Commit Your Changes">
+    Write clear, descriptive commit messages:
+    
+    ```bash
+    git add .
+    git commit -m 'Agrega NuevaFeature'
+    ```
+    
+    Good commit messages:
+    - Start with a verb (Agrega, Actualiza, Corrige, Refactoriza)
+    - Keep the first line under 50 characters
+    - Provide additional context in the body if needed
+  </Step>
+
+  <Step title="Push to Your Fork">
+    Push your branch to your GitHub fork:
+    
+    ```bash
+    git push origin feature/NuevaFeature
+    ```
+  </Step>
+
+  <Step title="Open a Pull Request">
+    Go to the original repository on GitHub and open a Pull Request from your feature branch.
+    
+    Your PR should include:
+    - A clear title describing the change
+    - Description of what was changed and why
+    - Any related issue numbers
+    - Screenshots or examples if applicable
+  </Step>
+</Steps>
+
+## Code Style Guidelines
+
+### Python (Backend)
+
+- Follow PEP 8 style guidelines
+- Use meaningful variable and function names
+- Add docstrings to functions and classes
+- Keep functions focused and single-purpose
+- Use type hints where appropriate
+
+```python
+def extraer_listado(html: str) -> list:
+    """
+    Extrae el listado de películas/series del HTML.
+    
+    Args:
+        html: HTML source code as string
+        
+    Returns:
+        List of dictionaries with media information
+    """
+    # Implementation
+```
+
+### TypeScript/React (Frontend)
+
+- Use TypeScript for type safety
+- Follow React hooks best practices
+- Organize hooks by domain (api/, ui/, utils/)
+- Use TailwindCSS for styling
+- Keep components small and reusable
+
+```typescript
+interface MediaItem {
+  titulo: string;
+  slug: string;
+  imagen: string;
+  tipo: string;
+}
+
+export function useMediaCatalog(section: string) {
+  // Implementation
+}
+```
+
+## What to Contribute
+
+### Good First Issues
+
+- Documentation improvements
+- Bug fixes with existing tests
+- Adding tests for untested code
+- UI/UX enhancements
+- Translation/localization
+
+### Larger Contributions
+
+- New extractors for additional sources
+- Performance optimizations
+- New features (discuss in an issue first)
+- Architectural improvements
+
+## Testing Requirements
+
+- All new features should include tests
+- Bug fixes should include a regression test
+- Maintain or improve code coverage
+- All tests must pass before PR is merged
+
+## Documentation
+
+When adding new features:
+
+- Update relevant documentation files
+- Add code comments for complex logic
+- Update the README if needed
+- Include usage examples
+
+## Getting Help
+
+If you need help:
+
+- Check existing documentation
+- Look at similar code in the project
+- Ask questions in your PR or issue
+- Review closed PRs for examples
+
+## Code of Conduct
+
+- Be respectful and constructive
+- Welcome newcomers and help them learn
+- Focus on the code, not the person
+- Accept constructive criticism gracefully
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the MIT License, the same license as the project.
+
+<Note>
+  **Project Maintainer**: Alexander Martínez González (@UnfairAdventage)
+  
+  All contributions are reviewed before merging to ensure code quality and consistency.
+</Note>

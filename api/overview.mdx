@@ -1,0 +1,101 @@
+---
+title: 'API Overview'
+description: 'Overview of the Web Scrapping Hub API'
+---
+
+## Introduction
+
+The Web Scrapping Hub API provides programmatic access to a comprehensive collection of movies, series, and anime content. The API is built with Flask and uses web scraping to aggregate content from various sources.
+
+## Base URL
+
+All API endpoints are relative to your server's base URL:
+
+```
+http://localhost:1234/api
+```
+
+In production, replace `localhost:1234` with your deployed server URL.
+
+## Authentication
+
+Currently, the API does not require authentication. All endpoints are publicly accessible.
+
+## Response Format
+
+All responses are returned in JSON format with appropriate HTTP status codes:
+
+- `200 OK` - Request successful
+- `400 Bad Request` - Missing or invalid parameters
+- `404 Not Found` - Resource not found
+- `500 Internal Server Error` - Server error
+- `503 Service Unavailable` - External service unavailable
+
+### Success Response
+
+Successful responses return the requested data directly:
+
+```json
+{
+  "resultados": [...],
+  "seccion": "Películas",
+  "pagina": 1
+}
+```
+
+### Error Response
+
+Error responses include an `error` field with a descriptive message:
+
+```json
+{
+  "error": "Sección no encontrada"
+}
+```
+
+## Available Endpoints
+
+<CardGroup cols={2}>
+  <Card title="Version" icon="code-branch" href="/api/version">
+    Check API version and updates
+  </Card>
+  <Card title="Secciones" icon="list" href="/api/secciones">
+    Get available content sections
+  </Card>
+  <Card title="Listado" icon="film" href="/api/listado">
+    Browse and search content
+  </Card>
+  <Card title="Deep Search" icon="magnifying-glass" href="/api/search">
+    Advanced content search
+  </Card>
+  <Card title="Serie" icon="tv" href="/api/serie">
+    Get series episodes and info
+  </Card>
+  <Card title="Película" icon="clapperboard" href="/api/pelicula">
+    Get movie player and info
+  </Card>
+  <Card title="Anime" icon="sparkles" href="/api/anime">
+    Get anime episodes and info
+  </Card>
+  <Card title="iFrame Player" icon="play" href="/api/iframe-player">
+    Extract video player from URL
+  </Card>
+</CardGroup>
+
+## CORS
+
+The API has CORS enabled, allowing requests from any origin.
+
+## Rate Limiting
+
+Currently, there is no rate limiting implemented. However, please be respectful of the server resources and avoid excessive requests.
+
+## Content Types
+
+The API works with three main content types:
+
+- **Películas** (Movies) - Feature films
+- **Series** (TV Series) - Multi-episode shows
+- **Anime** - Japanese animation series and movies
+
+Additional categories include K-Dramas, Caricaturas (Cartoons), and content organized by streaming networks (Netflix, HBO, Disney, etc.).

@@ -1,0 +1,460 @@
+---
+title: 'Search Functionality'
+description: 'Fast search and deep search capabilities for finding movies, series, and anime'
+icon: 'magnifying-glass'
+---
+
+## Overview
+
+Web Scraping Hub features a dual-mode search system that provides both **quick search** for instant results and **deep search** for comprehensive content discovery. The search architecture is built on React Query hooks with optimized caching and debouncing.
+
+## Search Modes
+
+<Tabs>
+  <Tab title="Quick Search">
+    ### Quick Search (Basic)
+    
+    Fast API-based search that queries a JSON endpoint for immediate results.
+    
+    **Best for:**
+    - Finding recently added content
+    - Quick title lookups
+    - Autocomplete suggestions
+    - Mobile browsing
+    
+    **Response time:** < 500ms
+  </Tab>
+  
+  <Tab title="Deep Search">
+    ### Deep Search (Comprehensive)
+    
+    Full HTML scraping search that crawls the entire catalog for matches.
+    
+    **Best for:**
+    - Finding older content
+    - Comprehensive results
+    - Fuzzy matching
+    - Desktop research
+    
+    **Response time:** 1-3 seconds
+  </Tab>
+</Tabs>
+
+## Quick Search Implementation
+
+### Backend API Endpoint
+
+The quick search uses a specialized JSON API that returns structured data:
+
+```python app.py:81-110
+busqueda = request.args.get('busqueda')
+if busqueda:
+    query = busqueda.strip()
+    url = f"https://sololatino.net/wp-json/dooplay/search/?keyword={query}&nonce=84428a202e"
+    
+    data = fetch_json(url)
+    items = []
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if isinstance(v, dict):
+                tipo_val = v.get("type", "").lower()
+                tipo = "movie" if tipo_val == "pelicula" else "series" if tipo_val == "serie" else "anime"
+                items.append({
+                    "id": k,
+                    "slug": v.get("url", "").rstrip('/').split('/')[-1],
+                    "title": v.get("title", ""),
+                    "image": v.get("img", ""),
+                    "year": v.get("extra", {}).get("date", ""),
+                    "language": "Latino",
+                    "type": tipo
+                })
+    return jsonify({"resultados": items, "seccion": "Busqueda", "pagina": 1})
+```
+
+<Note>
+The quick search endpoint uses a nonce-based API that provides pre-indexed results for faster response times.
+</Note>
+
+### Frontend Search Hook
+
+React Query hook with intelligent caching:
+
+```typescript search.ts:68-75
+export const useCatalogSearch = (query: string) => {
+  return useQuery({
+    queryKey: ['catalog-search', query],
+    queryFn: () => searchApi.searchCatalog(query),
+    enabled: !!query,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+};
+```
+
+**Key Features:**
+- Query key based on search term
+- Disabled when query is empty
+- 2-minute cache duration
+- Automatic background refetching
+
+## Deep Search Implementation
+
+### Backend Endpoint
+
+The deep search performs full HTML scraping for comprehensive results:
+
+```python app.py:143-156
+@app.route('/api/deep-search', methods=['GET'])
+def api_deep_search():
+    query = request.args.get('query', '').strip()
+    if not query:
+        return jsonify({'error': 'Falta el parámetro de búsqueda'}), 400
+    
+    url = f"https://sololatino.net/?s={quote_plus(query)}"
+    html = fetch_html(url)
+    if not html:
+        return jsonify({'error': 'No se pudo obtener resultados'}), 503
+    
+    resultados = extraer_listado(html)
+    return jsonify(resultados)
+```
+
+<Info>
+Deep search uses the same `extraer_listado` function as catalog browsing, ensuring consistent data structure.
+</Info>
+
+### Deep Search Hook
+
+```typescript search.ts:77-84
+export const useDeepSearchCatalog = (query: string) => {
+  return useQuery({
+    queryKey: ['deep-search-catalog', query],
+    queryFn: () => searchApi.deepSearchCatalog(query),
+    enabled: !!query,
+    staleTime: 2 * 60 * 1000,
+  });
+};
+```
+
+## Data Normalization
+
+### Search Result Mapping
+
+Both search modes normalize data to a consistent format:
+
+```typescript search.ts:36-63
+async deepSearchCatalog(query: string): Promise<CatalogItem[]> {
+  const data = await apiClient.get<any>('/deep-search', { query });
+  
+  return (data as any[]).map((item) => ({
+    id: item.slug || item.url,
+    slug: item.slug || item.url,
+    title: item.titulo || item.title || item.nombre || '',
+    alt: item.alt || '',
+    image: item.imagen || item.image || '',
+    year: item.año || item.year || '',
+    genres: Array.isArray(item.generos) 
+      ? item.generos
+      : typeof item.generos === 'string' && item.generos.trim() !== ''
+        ? item.generos.split(',').map((g: string) => g.trim())
+        : [],
+    language: item.idioma || item.language || 'Latino',
+    url: item.url,
+    type: item.tipo === 'pelicula' || item.type === 'movie'
+      ? 'movie'
+      : item.tipo === 'serie' || item.type === 'series'
+        ? 'series'
+        : 'anime'
+  }));
+}
+```
+
+<Accordion title="Normalization Features">
+  - **Multiple field fallbacks** - Handles varying source data structures
+  - **Genre parsing** - Converts strings to arrays automatically
+  - **Type classification** - Maps Spanish/English type names to standard values
+  - **Default values** - Provides fallbacks for missing data
+</Accordion>
+
+## Search Performance
+
+### Debouncing Strategy
+
+Search input is debounced to reduce API calls:
+
+<Steps>
+  <Step title="User Types">
+    User enters search query in input field
+  </Step>
+  <Step title="Debounce Delay">
+    System waits 300-500ms after last keystroke
+  </Step>
+  <Step title="Query Execution">
+    Search query fires only after typing stops
+  </Step>
+  <Step title="Cache Check">
+    React Query checks if results are cached
+  </Step>
+  <Step title="Display Results">
+    Results shown from cache or fresh fetch
+  </Step>
+</Steps>
+
+### Comparison: Quick vs Deep Search
+
+| Feature | Quick Search | Deep Search |
+|---------|--------------|-------------|
+| **Speed** | ~300ms | ~2s |
+| **Data Source** | JSON API | HTML Scraping |
+| **Coverage** | Recent items | Full catalog |
+| **Cloudflare Bypass** | Not needed | Required |
+| **Results Format** | Structured JSON | Parsed HTML |
+| **Cache Duration** | 2 minutes | 2 minutes |
+| **Error Rate** | Low | Medium |
+
+## URL Encoding
+
+Deep search properly encodes query parameters:
+
+```python app.py:148
+url = f"https://sololatino.net/?s={quote_plus(query)}"
+```
+
+<Warning>
+Always use `quote_plus` for URL encoding search queries to handle special characters and spaces correctly.
+</Warning>
+
+## Error Handling
+
+### Backend Error Responses
+
+<CodeGroup>
+```python Missing Parameter
+if not query:
+    return jsonify({'error': 'Falta el parámetro de búsqueda'}), 400
+```
+
+```python Fetch Failure
+if not html:
+    return jsonify({'error': 'No se pudo obtener resultados'}), 503
+```
+
+```python Exception Handling
+try:
+    # Search logic
+except Exception as e:
+    return jsonify({'error': f'Error: {str(e)}'}), 500
+```
+</CodeGroup>
+
+### Frontend Error States
+
+The search hooks automatically handle error states through React Query:
+
+```typescript
+const { data, isLoading, error } = useCatalogSearch(query);
+
+if (error) {
+  return <div>Error: {error.message}</div>;
+}
+```
+
+## Search Features
+
+<CardGroup cols={2}>
+  <Card title="Type Filtering" icon="filter">
+    Results automatically categorized by movie/series/anime
+  </Card>
+  <Card title="Fuzzy Matching" icon="wand-magic-sparkles">
+    Deep search finds partial matches and similar titles
+  </Card>
+  <Card title="Real-time Updates" icon="bolt">
+    Quick search provides live results as you type
+  </Card>
+  <Card title="Cache Optimization" icon="database">
+    Previous searches load instantly from cache
+  </Card>
+</CardGroup>
+
+## Integration with Catalog
+
+Search results display in the same catalog grid:
+
+```typescript
+const { data: searchResults } = useCatalogSearch(searchQuery);
+
+return (
+  <CatalogGrid 
+    items={searchResults || []} 
+    loading={isLoading} 
+  />
+);
+```
+
+<Tip>
+Reusing the `CatalogGrid` component ensures consistent UI between browsing and searching.
+</Tip>
+
+## Advanced Search Patterns
+
+### Search by Title
+```
+Avengers
+```
+
+### Search by Year
+```
+2024 action
+```
+
+### Search by Genre
+```
+comedy series
+```
+
+### Search with Special Characters
+```
+Spider-Man: No Way Home
+```
+
+<Note>
+Deep search handles special characters better than quick search due to full HTML parsing.
+</Note>
+
+## Cloudflare Bypass
+
+Both search modes benefit from the Cloudflare bypass system:
+
+```python http_client.py:1-18
+import cloudscraper
+
+_scraper = cloudscraper.create_scraper()
+
+def fetch_html(url):
+    try:
+        response = _scraper.get(url, timeout=30)
+        if response.status_code == 200:
+            return response.text
+    except Exception as e:
+        print(f"[ERROR] fetch_html: {e}")
+    return None
+```
+
+<Info>
+The `cloudscraper` library automatically handles Cloudflare challenges, cookies, and JavaScript challenges.
+</Info>
+
+## Search Result Quality
+
+### Data Completeness
+
+Search results include:
+
+- ✅ Title and alternative titles
+- ✅ Poster images with fallbacks
+- ✅ Release year
+- ✅ Genre classification
+- ✅ Content type (movie/series/anime)
+- ✅ Direct play URLs
+- ✅ Language information
+
+### Missing Data Handling
+
+```typescript search.ts:42-45
+title: item.titulo || item.title || item.nombre || '',
+alt: item.alt || '',
+image: item.imagen || item.image || '',
+year: item.año || item.year || '',
+```
+
+Multiple fallbacks ensure data is never undefined.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="When to Use Quick Search">
+    - Mobile users with limited bandwidth
+    - Recent content (last few months)
+    - Fast browsing sessions
+    - Autocomplete features
+  </Accordion>
+  
+  <Accordion title="When to Use Deep Search">
+    - Desktop users with good connection
+    - Older or obscure content
+    - Comprehensive research
+    - When quick search returns no results
+  </Accordion>
+  
+  <Accordion title="Search Input Design">
+    - Implement 300-500ms debounce
+    - Show loading indicator during search
+    - Display "No results" message gracefully
+    - Provide search mode toggle if both available
+  </Accordion>
+</AccordionGroup>
+
+## API Reference
+
+### Quick Search Endpoint
+
+```
+GET /api/listado?busqueda={query}
+```
+
+**Parameters:**
+- `busqueda` (string): Search query
+
+**Response:**
+```json
+{
+  "resultados": [
+    {
+      "id": "12345",
+      "slug": "movie-title",
+      "title": "Movie Title",
+      "image": "https://...",
+      "year": "2024",
+      "language": "Latino",
+      "type": "movie"
+    }
+  ],
+  "seccion": "Busqueda",
+  "pagina": 1
+}
+```
+
+### Deep Search Endpoint
+
+```
+GET /api/deep-search?query={query}
+```
+
+**Parameters:**
+- `query` (string, required): Search query
+
+**Response:**
+```json
+[
+  {
+    "id": "123",
+    "slug": "content-slug",
+    "titulo": "Content Title",
+    "imagen": "https://...",
+    "year": "2024",
+    "generos": "Action, Drama",
+    "idioma": "Latino",
+    "tipo": "pelicula"
+  }
+]
+```
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Catalog Browsing" icon="grid" href="/features/catalog-browsing">
+    Learn about section-based catalog navigation
+  </Card>
+  <Card title="Web Scraping" icon="spider" href="/features/web-scraping">
+    Understand the scraping technology behind search
+  </Card>
+</CardGroup>

@@ -1,0 +1,280 @@
+---
+title: 'Target URLs Configuration'
+description: 'Configure and manage scraping target URLs for different content categories'
+icon: 'bullseye-arrow'
+---
+
+## Overview
+
+Target URLs define the content sources that Web Scraping Hub will scrape. Each target represents a category of content (movies, series, anime, etc.) and is configured in the `TARGET_URLS` list in `config.py`.
+
+## Default Configuration
+
+The default target URLs are configured for the SoloLatino.net platform:
+
+```python
+BASE_URL = "https://sololatino.net"
+
+TARGET_URLS = [
+    {"nombre": "Películas", "url": f"{BASE_URL}/peliculas"},
+    {"nombre": "Series", "url": f"{BASE_URL}/series"},
+    {"nombre": "Anime", "url": f"{BASE_URL}/animes"},
+    {"nombre": "Peliculas de Anime", "url": f"{BASE_URL}/genero/anime"},
+    {"nombre": "Caricaturas", "url": f"{BASE_URL}/genre_series/toons"},
+    {"nombre": "K-Drama", "url": f"{BASE_URL}/genre_series/kdramas/"},
+    {"nombre": "Amazon", "url": f"{BASE_URL}/network/amazon"},
+    {"nombre": "Apple TV", "url": f"{BASE_URL}/network/apple-tv"},
+    {"nombre": "Disney", "url": f"{BASE_URL}/network/disney"},
+    {"nombre": "HBO", "url": f"{BASE_URL}/network/hbo"},
+    {"nombre": "HBO Max", "url": f"{BASE_URL}/network/hbo-max"},
+    {"nombre": "Hulu", "url": f"{BASE_URL}/network/hulu"},
+    {"nombre": "Netflix", "url": f"{BASE_URL}/network/netflix"},
+]
+```
+
+## Target URL Structure
+
+Each target URL is a dictionary with the following fields:
+
+<ParamField path="nombre" type="string" required>
+  The display name for this content category. This name appears in the UI and is used in API endpoints.
+  
+  Examples: `"Películas"`, `"Series"`, `"Netflix"`
+</ParamField>
+
+<ParamField path="url" type="string" required>
+  The full URL to scrape for this category. Typically constructed using the `BASE_URL`.
+  
+  Example: `f"{BASE_URL}/peliculas"`
+</ParamField>
+
+## Content Categories
+
+### Media Type Categories
+
+These categories organize content by media type:
+
+| Category | Name | URL Pattern |
+|----------|------|-------------|
+| Movies | Películas | `/peliculas` |
+| TV Series | Series | `/series` |
+| Anime Series | Anime | `/animes` |
+| Anime Movies | Peliculas de Anime | `/genero/anime` |
+| Cartoons | Caricaturas | `/genre_series/toons` |
+| Korean Dramas | K-Drama | `/genre_series/kdramas/` |
+
+### Streaming Platform Categories
+
+These categories filter content by streaming platform:
+
+| Platform | URL Pattern |
+|----------|-------------|
+| Amazon | `/network/amazon` |
+| Apple TV | `/network/apple-tv` |
+| Disney | `/network/disney` |
+| HBO | `/network/hbo` |
+| HBO Max | `/network/hbo-max` |
+| Hulu | `/network/hulu` |
+| Netflix | `/network/netflix` |
+
+## Adding New Target URLs
+
+To add a new content category:
+
+```python
+TARGET_URLS = [
+    # ... existing targets ...
+    {"nombre": "Paramount+", "url": f"{BASE_URL}/network/paramount"},
+    {"nombre": "Documentales", "url": f"{BASE_URL}/documentales"},
+]
+```
+
+<Steps>
+  <Step title="Add to TARGET_URLS">
+    Add a new dictionary to the `TARGET_URLS` list in `config.py`
+  </Step>
+  <Step title="Restart the Server">
+    Restart the Flask backend to apply the changes
+  </Step>
+  <Step title="Verify in API">
+    Check that the new section appears in `/api/secciones`
+  </Step>
+</Steps>
+
+## Pagination Handling
+
+The application automatically handles pagination for target URLs:
+
+```python
+# Most categories use standard pagination
+url = f"{url}/page/{pagina}"
+
+# K-Drama has special pagination format
+if seccion_real == 'K-Drama':
+    url = f"{url}page/{pagina}"
+else:
+    url = f"{url}/page/{pagina}"
+```
+
+<Info>
+  The `K-Drama` category uses a different URL pattern for pagination without a leading slash.
+</Info>
+
+## URL Normalization
+
+The backend normalizes section names to handle case-insensitive and accent-insensitive matching:
+
+```python
+def normaliza(texto):
+    return unicodedata.normalize('NFKD', texto)
+        .encode('ascii', 'ignore')
+        .decode('ascii')
+        .lower()
+```
+
+This allows users to request `"peliculas"`, `"Películas"`, or `"PELICULAS"` and get the same results.
+
+## Custom Target URL Example
+
+For a different scraping source:
+
+```python
+# Custom configuration for a different site
+BASE_URL = "https://mystreaming.com"
+
+TARGET_URLS = [
+    {"nombre": "Action Movies", "url": f"{BASE_URL}/genre/action"},
+    {"nombre": "Comedy Series", "url": f"{BASE_URL}/series/comedy"},
+    {"nombre": "Thriller", "url": f"{BASE_URL}/thriller"},
+    {"nombre": "Kids Content", "url": f"{BASE_URL}/kids"},
+]
+```
+
+<Warning>
+  When using a custom site, ensure the HTML structure matches the expected format for the extractors. You may need to modify the extractor functions in `backend/extractors/`.
+</Warning>
+
+## API Integration
+
+Target URLs are exposed through the API:
+
+### List All Sections
+
+```bash
+GET /api/secciones
+```
+
+Response:
+```json
+{
+  "secciones": [
+    "Películas",
+    "Series",
+    "Anime",
+    "Peliculas de Anime",
+    "Caricaturas",
+    "K-Drama",
+    "Amazon",
+    "Apple TV",
+    "Disney",
+    "HBO",
+    "HBO Max",
+    "Hulu",
+    "Netflix"
+  ]
+}
+```
+
+### Get Content from Section
+
+```bash
+GET /api/listado?seccion=Películas&pagina=1
+```
+
+Response:
+```json
+{
+  "resultados": [...],
+  "seccion": "Películas",
+  "pagina": 1
+}
+```
+
+## URL Validation
+
+To test a target URL configuration:
+
+```python
+# Test in Python console
+from backend.utils.http_client import fetch_html
+from backend.extractors.generic_extractor import extraer_listado
+
+url = "https://sololatino.net/peliculas"
+html = fetch_html(url)
+if html:
+    resultados = extraer_listado(html)
+    print(f"Found {len(resultados)} items")
+```
+
+## Special URL Patterns
+
+### Search URLs
+
+Search functionality uses a different URL pattern:
+
+```python
+# API search endpoint
+url = f"https://sololatino.net/wp-json/dooplay/search/?keyword={query}&nonce=84428a202e"
+
+# Deep search endpoint
+url = f"https://sololatino.net/?s={quote_plus(query)}"
+```
+
+### Content-Specific URLs
+
+When accessing specific content:
+
+```python
+# Movie URL pattern
+url = f"{BASE_URL}/peliculas/{slug}"
+
+# Series URL pattern
+url = f"{BASE_URL}/series/{slug}"
+
+# Anime URL pattern
+url = f"{BASE_URL}/animes/{slug}"
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Section not appearing in API">
+    - Verify the target URL is properly added to `TARGET_URLS`
+    - Restart the Flask backend server
+    - Check for syntax errors in `config.py`
+  </Accordion>
+  
+  <Accordion title="Empty results from target URL">
+    - Verify the URL is accessible
+    - Check if the site structure has changed
+    - Ensure the extractor matches the HTML structure
+    - Test with `fetch_html()` function
+  </Accordion>
+  
+  <Accordion title="Pagination not working">
+    - Check if the URL pattern matches the site's pagination format
+    - Some sections may use different pagination patterns
+    - Verify the URL construction in `app.py`
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Backend Configuration" icon="server" href="/configuration/backend-config">
+    Configure the Flask backend server
+  </Card>
+  <Card title="Extractors" icon="code" href="/api/extractors/generic-extractor">
+    Learn about content extraction logic
+  </Card>
+</CardGroup>

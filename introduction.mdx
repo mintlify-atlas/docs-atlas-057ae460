@@ -1,0 +1,313 @@
+---
+title: "Introduction"
+description: "Learn about Web Scrapping Hub's architecture, features, and how it aggregates streaming content through web scraping"
+---
+
+# Introduction to Web Scrapping Hub
+
+Web Scrapping Hub is a full-stack streaming application that aggregates movies, series, and anime content from external sources through robust web scraping. Built with Flask (Python) and React, it provides a modern interface for browsing and streaming content with seamless Cloudflare protection bypass.
+
+## What is Web Scrapping Hub?
+
+Web Scrapping Hub transforms unstructured HTML from external streaming sites into a structured, browsable catalog. The application extracts metadata, episode listings, and streaming links, presenting them through a responsive React interface—all served from a single containerized application on port 1234.
+
+<Note>
+  **Single-Port Architecture**: Both the React SPA and Flask API are served on port 1234, eliminating the need for separate web servers or reverse proxies.
+</Note>
+
+## Core Architecture
+
+The application implements a three-tier architecture within a single Docker container:
+
+<Steps>
+  <Step title="Presentation Layer">
+    React 18 SPA with Vite build system, TailwindCSS styling, and React Router for clean URLs (`/page/1`, `/page/2`)
+  </Step>
+  <Step title="Application Logic Layer">
+    Flask RESTful API with modular endpoints for catalog browsing, search, series episodes, and video player extraction
+  </Step>
+  <Step title="Data Extraction Layer">
+    Modular extractor system using BeautifulSoup4 and cloudscraper to bypass Cloudflare and parse HTML into structured JSON
+  </Step>
+</Steps>
+
+### Architecture Diagram
+
+The system processes user requests through a unified Flask application:
+
+```
+User Request → Flask App (Port 1234)
+                    ├── React SPA (Frontend)
+                    └── REST API (Backend)
+                            └── Extractors (cloudscraper + BeautifulSoup)
+                                    └── External Sites
+```
+
+## Key Features
+
+### Content Aggregation
+
+<CardGroup cols={2}>
+  <Card title="Multiple Content Types" icon="film">
+    - Movies (Latino)
+    - TV Series with episode tracking
+    - Anime series and films
+    - K-Dramas and cartoons
+    - Content from Netflix, HBO, Disney+, Amazon, and more
+  </Card>
+  <Card title="Rich Metadata" icon="database">
+    - Titles, posters, and thumbnails
+    - Release dates and genres
+    - Episode listings with season organization
+    - Synopsis and descriptions
+  </Card>
+</CardGroup>
+
+### Web Scraping Engine
+
+<Info>
+  **Cloudflare Bypass**: Web Scrapping Hub uses `cloudscraper` to overcome Cloudflare protection, ensuring reliable content extraction even from protected sites.
+</Info>
+
+The scraping engine consists of three specialized extractors:
+
+- **Generic Extractor** (`generic_extractor.py`): Parses catalog listings and movie metadata
+- **Serie Extractor** (`serie_extractor.py`): Extracts episode listings organized by season
+- **Iframe Extractor** (`iframe_extractor.py`): Locates and extracts video player URLs
+
+### User Experience Features
+
+<CardGroup cols={2}>
+  <Card title="Clean Pagination" icon="arrows-left-right">
+    Navigate catalogs with clean URLs (`/page/2`) instead of query parameters
+  </Card>
+  <Card title="Advanced Search" icon="magnifying-glass">
+    - Quick search via API endpoint
+    - Deep search functionality
+    - Filter by section (Movies, Series, Anime, etc.)
+  </Card>
+  <Card title="Integrated Video Player" icon="play">
+    - Modal playback with episode navigation
+    - Footer controls with synopsis display
+    - Rounded buttons with hover effects
+  </Card>
+  <Card title="Responsive Design" icon="mobile">
+    TailwindCSS-powered responsive interface that works on desktop and mobile
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+### Backend Technologies
+
+| Technology | Purpose | Version |
+|------------|---------|--------|
+| Flask | RESTful API server | Latest |
+| Flask-CORS | Cross-origin resource sharing | Latest |
+| cloudscraper | HTTP client with Cloudflare bypass | Latest |
+| BeautifulSoup4 | HTML parsing and extraction | Latest |
+| Python | Runtime environment | 3.11+ |
+
+### Frontend Technologies
+
+| Technology | Purpose | Version |
+|------------|---------|--------|
+| React | UI framework | 18.3.1 |
+| Vite | Build system and dev server | 5.4.2 |
+| React Router | Client-side routing | 7.6.3 |
+| TanStack Query | Data fetching and caching | 5.83.0 |
+| TailwindCSS | Utility-first CSS framework | 3.4.1 |
+| Lucide React | Icon library | 0.344.0 |
+
+### Infrastructure
+
+<CodeGroup>
+```dockerfile Docker Multi-Stage Build
+# Stage 1: Build frontend
+FROM node:20-alpine AS frontend-build
+WORKDIR /app/frontend/project
+COPY ../frontend/project/ ./
+RUN npm install && npm run build
+
+# Stage 2: Backend + serve frontend
+FROM python:3.11-alpine
+WORKDIR /app
+COPY ../backend/ ./backend/
+COPY --from=frontend-build /app/frontend/project/dist ./frontend/dist
+RUN pip install -r ./backend/requirements.txt
+EXPOSE 1234
+CMD ["python", "-m", "backend.app"]
+```
+
+```bash Local Development
+# Backend
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m backend.app
+
+# Frontend (separate terminal)
+cd frontend/project
+npm install
+npm run dev
+```
+</CodeGroup>
+
+## Deployment Models
+
+Web Scrapping Hub supports multiple deployment scenarios:
+
+<Tabs>
+  <Tab title="Docker (Recommended)">
+    **Single-container deployment** optimized for home servers and CasaOS.
+    
+    - Multi-architecture support (AMD64, ARM64, ARMv7)
+    - Self-contained with frontend and backend
+    - Exposes port 1234 for all services
+    
+    ```bash
+    docker build -t peliculas-casaos .
+    docker run -d --name peliculas -p 1234:1234 peliculas-casaos
+    ```
+  </Tab>
+  <Tab title="CasaOS">
+    **One-click deployment** for CasaOS home server environments.
+    
+    - Integrated with CasaOS app store
+    - Automatic container management
+    - Web-based configuration
+  </Tab>
+  <Tab title="Local Development">
+    **Separate frontend and backend** for development and testing.
+    
+    - Backend: Flask dev server on port 1234
+    - Frontend: Vite dev server with hot reload
+    - CORS enabled for cross-origin requests
+  </Tab>
+</Tabs>
+
+## API Endpoints Overview
+
+The Flask backend exposes several RESTful endpoints:
+
+| Endpoint | Method | Purpose |
+|----------|--------|--------|
+| `/api/version` | GET | Check app version and updates |
+| `/api/secciones` | GET | Get available content sections |
+| `/api/listado` | GET | Get catalog listings with pagination |
+| `/api/deep-search` | GET | Deep search functionality |
+| `/api/serie/<slug>` | GET | Get series episodes by season |
+| `/api/pelicula/<slug>` | GET | Get movie details and player |
+| `/api/anime/<slug>` | GET | Get anime episodes |
+| `/api/iframe_player` | GET | Extract iframe player URL |
+
+<Info>
+  All endpoints return JSON responses. See the [API Reference](/api/overview) for detailed documentation.
+</Info>
+
+## Content Sections
+
+The application aggregates content from multiple categories:
+
+<CardGroup cols={3}>
+  <Card title="Movies" icon="film">
+    Latino movies from sololatino.net
+  </Card>
+  <Card title="Series" icon="tv">
+    TV series with episode tracking
+  </Card>
+  <Card title="Anime" icon="wand-sparkles">
+    Anime series and movies
+  </Card>
+  <Card title="K-Drama" icon="heart">
+    Korean drama series
+  </Card>
+  <Card title="Cartoons" icon="child">
+    Animated series and shows
+  </Card>
+  <Card title="Streaming Platforms" icon="layer-group">
+    Netflix, HBO Max, Disney+, Amazon Prime, Apple TV, Hulu
+  </Card>
+</CardGroup>
+
+## Modular Extractor System
+
+Web Scrapping Hub uses a modular extractor architecture for maintainability and extensibility:
+
+### Generic Extractor
+
+Extracts catalog listings from HTML:
+
+```python
+def extraer_listado(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    articulos = soup.select('article.item')
+    datos = []
+    for articulo in articulos:
+        # Extract poster, title, image, year, genres, etc.
+        datos.append({
+            "id": id_post,
+            "slug": slug,
+            "titulo": titulo,
+            "imagen": imagen,
+            "year": year,
+            "generos": generos,
+            "tipo": tipo
+        })
+    return datos
+```
+
+### Serie Extractor
+
+Extracts episode listings organized by season:
+
+```python
+def extraer_episodios_serie(url):
+    html = fetch_html(url)
+    soup = BeautifulSoup(html, 'html.parser')
+    temporadas_divs = soup.select('#seasons .se-c')
+    episodios_data = []
+    for temporada_div in temporadas_divs:
+        num_temporada = int(temporada_div.get('data-season', 0))
+        episodios = temporada_div.select('li')
+        # Extract episode details
+    return {"info": info, "episodios": episodios_data}
+```
+
+### Iframe Extractor
+
+Locates video player iframes for streaming:
+
+```python
+def extraer_iframe_reproductor(url):
+    # Extract iframe URLs from movie/episode pages
+    return {
+        "player_url": url,
+        "fuente": source,
+        "formato": format
+    }
+```
+
+## Next Steps
+
+Now that you understand the architecture, here's how to proceed:
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get Web Scrapping Hub running in minutes
+  </Card>
+  <Card title="Local Setup" icon="laptop-code" href="/installation/local-setup">
+    Install for local development
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/installation/docker-deployment">
+    Deploy with Docker
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore the REST API
+  </Card>
+</CardGroup>
+
+<Warning>
+  **Legal Notice**: Web Scrapping Hub is for educational purposes. Ensure compliance with terms of service of any sites you scrape.
+</Warning>

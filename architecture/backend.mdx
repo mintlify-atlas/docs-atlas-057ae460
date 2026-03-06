@@ -1,0 +1,417 @@
+---
+title: 'Backend Architecture'
+description: 'Flask backend architecture, API design, routes, and implementation details'
+---
+
+## Overview
+
+The backend is built with Flask, a lightweight Python web framework, and provides a RESTful API for content discovery, metadata extraction, and video player access. It follows a modular design pattern with clear separation between routing, business logic, and data extraction.
+
+## Project Structure
+
+```
+backend/
+├── app.py              # Main Flask application and routes
+├── main.py             # Entry point
+├── config.py           # Configuration and constants
+├── extractors/
+│   ├── __init__.py
+│   ├── generic_extractor.py    # Catalog and movie info
+│   ├── serie_extractor.py      # Series episodes and metadata
+│   └── iframe_extractor.py     # Video player extraction
+├── utils/
+│   ├── __init__.py
+│   ├── http_client.py          # HTTP fetching with CloudScraper
+│   ├── adblocker.py            # Ad blocking utilities
+│   └── parser.py               # HTML parsing helpers
+└── tests/
+    ├── test_api.py
+    ├── test_extractors.py
+    └── test_lazy_images.py
+```
+
+## Flask Application Setup
+
+The main application is configured in `backend/app.py:15-18`:
+
+```python backend/app.py
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app)  # Enable cross-origin requests
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+app.config['ETAG_DISABLED'] = True
+```
+
+<Info>
+CORS is enabled to allow the frontend development server to communicate with the backend API.
+</Info>
+
+## API Routes
+
+The backend exposes several RESTful endpoints:
+
+### Version Management
+
+#### GET /api/version
+
+Checks for application updates by comparing local version with GitHub repository.
+
+```python backend/app.py
+@app.route('/api/version', methods=['GET'])
+def api_version():
+    try:
+        remote_version = _scraper.get(GITHUB_VERSION_URL, timeout=5).text.strip()
+    except Exception as e:
+        return jsonify({"error": f"No se pudo obtener la versión remota: {e}", 
+                       "version": APP_VERSION}), 200
+    
+    cmp = compare_versions(APP_VERSION, remote_version)
+    # Returns update_available, version info, and changelog
+```
+
+**Response:**
+```json
+{
+  "version": "1.4.8",
+  "latest_version": "1.4.8",
+  "update_available": false,
+  "changes": "# Changelog content..."
+}
+```
+
+### Catalog Endpoints
+
+#### GET /api/secciones
+
+Returns available content sections (Movies, Series, Anime, etc.).
+
+```python backend/app.py
+@app.route('/api/secciones', methods=['GET'])
+def api_secciones():
+    return jsonify({"secciones": SECCIONES_LIST})
+```
+
+#### GET /api/listado
+
+Fetches paginated catalog listings with optional search and filtering.
+
+**Parameters:**
+- `seccion` (optional): Section name (e.g., "Películas", "Series")
+- `pagina` (optional): Page number (default: 1)
+- `busqueda` (optional): Search query
+
+```python backend/app.py
+@app.route('/api/listado', methods=['GET'])
+def api_listado():
+    busqueda = request.args.get('busqueda')
+    seccion = request.args.get('seccion')
+    pagina = int(request.args.get('pagina', 1))
+    
+    # Handle search vs catalog browsing
+    if busqueda:
+        # Search via API endpoint
+        url = f"https://sololatino.net/wp-json/dooplay/search/?keyword={query}"
+        data = fetch_json(url)
+        # Process search results
+    else:
+        # Fetch catalog page
+        url = SECCIONES[seccion_real]
+        if pagina > 1:
+            url = f"{url}/page/{pagina}"
+        html = fetch_html(url)
+        resultados = extraer_listado(html)
+```
+
+**Response:**
+```json
+{
+  "resultados": [
+    {
+      "id": "12345",
+      "slug": "movie-slug",
+      "titulo": "Movie Title",
+      "imagen": "https://...",
+      "year": "2024",
+      "generos": "Action, Drama",
+      "idioma": "Latino",
+      "tipo": "pelicula"
+    }
+  ],
+  "seccion": "Películas",
+  "pagina": 1
+}
+```
+
+#### GET /api/deep-search
+
+Performs deep search across all content types.
+
+```python backend/app.py
+@app.route('/api/deep-search', methods=['GET'])
+def api_deep_search():
+    query = request.args.get('query', '').strip()
+    url = f"https://sololatino.net/?s={quote_plus(query)}"
+    html = fetch_html(url)
+    resultados = extraer_listado(html)
+    return jsonify(resultados)
+```
+
+### Content Detail Endpoints
+
+#### GET /api/pelicula/\{slug\}
+
+Retrieves movie details and player information.
+
+```python backend/app.py
+@app.route('/api/pelicula/<slug>', methods=['GET'])
+def api_ver_pelicula(slug):
+    # Try movies section first
+    url = f"{BASE_URL}/peliculas/{slug}"
+    player = extraer_iframe_reproductor(url)
+    html = fetch_html(url)
+    info = extraer_info_pelicula(html)
+    
+    # Fallback to anime movies if not found
+    if not player:
+        url = f"{BASE_URL}/genero/anime/{slug}"
+        player = extraer_iframe_reproductor(url)
+```
+
+**Response:**
+```json
+{
+  "slug": "movie-slug",
+  "player": {
+    "player_url": "https://...",
+    "source": "domain.com",
+    "format": "iframe"
+  },
+  "info": {
+    "titulo": "Movie Title",
+    "sinopsis": "Plot summary...",
+    "fecha_estreno": "2024",
+    "generos": ["Action", "Drama"],
+    "imagen_poster": "https://..."
+  },
+  "encontrado_en": "peliculas"
+}
+```
+
+#### GET /api/serie/\{slug\}
+
+Retrieves series details with all episodes organized by season.
+
+```python backend/app.py
+@app.route('/api/serie/<slug>', methods=['GET'])
+def api_ver_serie(slug):
+    url = f"{BASE_URL}/series/{slug}"
+    result = extraer_episodios_serie(url)
+    episodios = result.get("episodios", [])
+    info = result.get("info", {})
+    
+    # Organize episodes by season
+    temporadas = {}
+    for ep in episodios:
+        t = ep['temporada']
+        if t not in temporadas:
+            temporadas[t] = []
+        temporadas[t].append(ep)
+```
+
+**Response:**
+```json
+{
+  "slug": "series-slug",
+  "info": {
+    "titulo": "Series Title",
+    "sinopsis": "Description...",
+    "generos": ["Drama", "Comedy"],
+    "imagen_poster": "https://...",
+    "fecha_estreno": "2024"
+  },
+  "temporadas": {
+    "1": [
+      {
+        "temporada": 1,
+        "episodio": 1,
+        "titulo": "Episode Title",
+        "fecha": "2024-01-01",
+        "imagen": "https://...",
+        "url": "https://..."
+      }
+    ]
+  }
+}
+```
+
+#### GET /api/anime/\{slug\}
+
+Similar to series endpoint but specifically for anime content.
+
+#### GET /api/iframe_player
+
+Extracts player URL from a given episode/movie page.
+
+**Parameters:**
+- `url`: Full URL to the content page
+
+```python backend/app.py
+@app.route('/api/iframe_player', methods=['GET'])
+def api_iframe_player():
+    url = request.args.get('url')
+    player = extraer_iframe_reproductor(url)
+    return jsonify(player)
+```
+
+## Static File Serving
+
+In production, the backend serves the compiled frontend:
+
+```python backend/app.py
+FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), '../frontend/dist'))
+
+@app.route('/assets/<path:path>')
+def send_assets(path):
+    return send_from_directory(os.path.join(FRONTEND_DIST, 'assets'), path)
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    file_path = os.path.join(FRONTEND_DIST, path)
+    if path != "" and os.path.exists(file_path):
+        return send_from_directory(FRONTEND_DIST, path)
+    return send_from_directory(FRONTEND_DIST, 'index.html')  # SPA fallback
+```
+
+<Note>
+The SPA fallback ensures that React Router handles all non-API routes on the client side.
+</Note>
+
+## HTTP Client
+
+The HTTP client (`backend/utils/http_client.py:1-33`) uses CloudScraper to bypass Cloudflare protection:
+
+```python backend/utils/http_client.py
+import cloudscraper
+
+_scraper = cloudscraper.create_scraper()
+
+def fetch_html(url):
+    """Fetches HTML with Cloudflare bypass"""
+    try:
+        response = _scraper.get(url, timeout=30)
+        if response.status_code == 200:
+            return response.text
+        print(f"[ERROR] fetch_html: status {response.status_code} for {url}")
+    except Exception as e:
+        print(f"[ERROR] fetch_html: {e}")
+    return None
+
+def fetch_json(url):
+    """Fetches JSON with Cloudflare bypass"""
+    try:
+        response = _scraper.get(url, timeout=30)
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        print(f"[ERROR] fetch_json: {e}")
+    return None
+```
+
+## Utility Functions
+
+### Text Normalization
+
+Used for case-insensitive section matching:
+
+```python backend/app.py
+def normaliza(texto):
+    return unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('ascii').lower()
+```
+
+### Version Comparison
+
+```python backend/app.py
+def compare_versions(local, remote):
+    def parse(v):
+        return [int(x) for x in v.strip().split('.')]
+    l, r = parse(local), parse(remote)
+    for lv, rv in zip(l, r):
+        if lv < rv:
+            return -1
+        elif lv > rv:
+            return 1
+    return 0 if len(l) == len(r) else (-1 if len(l) < len(r) else 1)
+```
+
+## Error Handling
+
+The backend implements consistent error handling:
+
+```python
+# 404 for not found content
+if not player:
+    return jsonify({"error": "Película no encontrada"}), 404
+
+# 500 for server errors
+try:
+    # Processing
+except Exception as e:
+    return jsonify({"error": f"Error: {str(e)}"}), 500
+
+# 503 for external service failures
+if html is None:
+    return jsonify({"error": "No se pudo obtener HTML"}), 503
+```
+
+## Configuration
+
+Configuration is centralized in `backend/config.py:1-30`:
+
+```python backend/config.py
+APP_VERSION = "1.4.8"
+GITHUB_VERSION_URL = "https://raw.githubusercontent.com/.../CurrentVersion"
+GITHUB_CHANGES_URL = "https://raw.githubusercontent.com/.../Changes"
+
+BASE_URL = "https://sololatino.net"
+
+TARGET_URLS = [
+    {"nombre": "Películas", "url": f"{BASE_URL}/peliculas"},
+    {"nombre": "Series", "url": f"{BASE_URL}/series"},
+    {"nombre": "Anime", "url": f"{BASE_URL}/animes"},
+    {"nombre": "Netflix", "url": f"{BASE_URL}/network/netflix"},
+    # ... more sections
+]
+```
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Timeout Handling" icon="clock">
+    All HTTP requests have 30s timeout to prevent hanging
+  </Card>
+  <Card title="Caching" icon="database">
+    Static assets served with appropriate cache headers
+  </Card>
+  <Card title="Lazy Loading" icon="bolt">
+    Images extracted with lazy-load attribute detection
+  </Card>
+  <Card title="Error Recovery" icon="shield">
+    Fallback logic for content not found in primary source
+  </Card>
+</CardGroup>
+
+## Testing
+
+The backend includes comprehensive test suites:
+
+- `test_api.py`: API endpoint integration tests
+- `test_extractors.py`: Extractor unit tests
+- `test_lazy_images.py`: Image extraction tests
+
+<Card title="Related Documentation" icon="book">
+  - [Extractor System](/architecture/extractors) - Detailed extractor implementation
+  - [API Reference](/api/overview) - Complete API documentation
+</Card>

@@ -1,0 +1,194 @@
+---
+title: 'Deep Search'
+api: 'GET /api/deep-search'
+description: 'Perform an advanced search across all content'
+---
+
+## Endpoint
+
+```
+GET /api/deep-search
+```
+
+## Description
+
+Performs a deep search across the entire content catalog using the source website's native search functionality. This provides more comprehensive results than the quick search available in the `/api/listado` endpoint.
+
+## Parameters
+
+<ParamField query="query" type="string" required>
+  Search query string. Cannot be empty.
+</ParamField>
+
+## Response
+
+Returns an array of content items directly (not wrapped in an object).
+
+<ResponseField name="[array]" type="array" required>
+  Array of content items matching the search query
+  
+  <Expandable title="Item properties">
+    <ResponseField name="id" type="string">
+      Unique identifier for the item
+    </ResponseField>
+    
+    <ResponseField name="slug" type="string">
+      URL-friendly identifier used in detail endpoints
+    </ResponseField>
+    
+    <ResponseField name="titulo" type="string">
+      Title of the content
+    </ResponseField>
+    
+    <ResponseField name="alt" type="string">
+      Alternative text for the image
+    </ResponseField>
+    
+    <ResponseField name="imagen" type="string">
+      URL of the poster image
+    </ResponseField>
+    
+    <ResponseField name="year" type="string">
+      Release year or date
+    </ResponseField>
+    
+    <ResponseField name="generos" type="string">
+      Comma-separated genres
+    </ResponseField>
+    
+    <ResponseField name="idioma" type="string">
+      Audio language (e.g., "Latino", "Otro")
+    </ResponseField>
+    
+    <ResponseField name="tipo" type="string">
+      Content type: "pelicula", "serie", or "Otro"
+    </ResponseField>
+    
+    <ResponseField name="url" type="string">
+      Full URL to the content page
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Error Response
+
+<ResponseField name="error" type="string">
+  Error message describing what went wrong
+</ResponseField>
+
+## Example Requests
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:1234/api/deep-search?query=avengers"
+```
+
+```javascript JavaScript
+fetch('http://localhost:1234/api/deep-search?query=avengers')
+  .then(response => response.json())
+  .then(data => console.log(data));
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'http://localhost:1234/api/deep-search',
+    params={'query': 'avengers'}
+)
+data = response.json()
+print(data)
+```
+</CodeGroup>
+
+## Example Response
+
+### Success Response
+
+```json
+[
+  {
+    "id": "11223",
+    "slug": "avengers-endgame",
+    "titulo": "Avengers: Endgame",
+    "alt": "Avengers: Endgame",
+    "imagen": "https://example.com/endgame.jpg",
+    "year": "2019",
+    "generos": "Action, Adventure, Sci-Fi",
+    "idioma": "Latino",
+    "tipo": "pelicula",
+    "url": "https://sololatino.net/peliculas/avengers-endgame"
+  },
+  {
+    "id": "44556",
+    "slug": "avengers-infinity-war",
+    "titulo": "Avengers: Infinity War",
+    "alt": "Avengers: Infinity War",
+    "imagen": "https://example.com/infinitywar.jpg",
+    "year": "2018",
+    "generos": "Action, Adventure, Sci-Fi",
+    "idioma": "Latino",
+    "tipo": "pelicula",
+    "url": "https://sololatino.net/peliculas/avengers-infinity-war"
+  }
+]
+```
+
+## Error Responses
+
+### Missing Query Parameter
+
+```json
+{
+  "error": "Falta el parámetro de búsqueda"
+}
+```
+Status: `400 Bad Request`
+
+### Service Unavailable
+
+```json
+{
+  "error": "No se pudo obtener resultados de búsqueda profunda"
+}
+```
+Status: `503 Service Unavailable`
+
+### Search Failed
+
+```json
+{
+  "error": "No se pudo realizar la búsqueda profunda: Connection timeout"
+}
+```
+Status: `500 Internal Server Error`
+
+## Deep Search vs Quick Search
+
+<AccordionGroup>
+  <Accordion title="Deep Search (/api/deep-search)">
+    - Uses the source website's native search page
+    - More comprehensive results
+    - Searches across all metadata fields
+    - Better for finding specific titles
+    - Returns full result array
+  </Accordion>
+  
+  <Accordion title="Quick Search (/api/listado?busqueda=...)">
+    - Uses the source website's AJAX search API
+    - Faster response time
+    - Good for autocomplete/suggestions
+    - Returns results wrapped with metadata
+    - Limited to top results
+  </Accordion>
+</AccordionGroup>
+
+## URL Encoding
+
+The search query is automatically URL-encoded, so spaces and special characters are handled correctly:
+
+```bash
+# These are equivalent:
+curl "http://localhost:1234/api/deep-search?query=spider man"
+curl "http://localhost:1234/api/deep-search?query=spider%20man"
+```

@@ -1,0 +1,415 @@
+---
+title: 'Environment Variables'
+description: 'Configure runtime environment variables for different deployment scenarios'
+icon: 'code'
+---
+
+## Overview
+
+Web Scraping Hub uses environment variables to configure runtime behavior, especially in Docker and production deployments. This allows you to customize settings without modifying the source code.
+
+## Environment Variables Reference
+
+### Docker Environment Variables
+
+When deploying with Docker, the following environment variables are available:
+
+<ParamField path="PGID" type="integer" default="1000">
+  Process Group ID for the container. Used for file permissions.
+  
+  ```yaml
+  environment:
+    - PGID=1000
+  ```
+</ParamField>
+
+<ParamField path="PUID" type="integer" default="1000">
+  Process User ID for the container. Used for file permissions.
+  
+  ```yaml
+  environment:
+    - PUID=1000
+  ```
+</ParamField>
+
+<ParamField path="TZ" type="string" default="America/Bogota">
+  Timezone for the container. Affects logging timestamps and scheduled tasks.
+  
+  ```yaml
+  environment:
+    - TZ=America/Bogota
+  ```
+  
+  Common values:
+  - `America/New_York`
+  - `Europe/London`
+  - `Asia/Tokyo`
+  - `UTC`
+</ParamField>
+
+### Flask Environment Variables
+
+<ParamField path="FLASK_ENV" type="string" default="production">
+  Flask environment mode. Controls various Flask behaviors.
+  
+  ```yaml
+  environment:
+    - FLASK_ENV=production
+  ```
+  
+  Options:
+  - `production` - Production mode (recommended for deployment)
+  - `development` - Development mode with hot reload
+</ParamField>
+
+<ParamField path="FLASK_DEBUG" type="boolean" default="false">
+  Enable or disable Flask debug mode.
+  
+  ```yaml
+  environment:
+    - FLASK_DEBUG=false
+  ```
+  
+  <Warning>
+    Never set `FLASK_DEBUG=true` in production. It exposes sensitive information and enables the interactive debugger.
+  </Warning>
+</ParamField>
+
+## Docker Compose Configuration
+
+The complete environment configuration in `docker-compose.yml`:
+
+```yaml
+services:
+  anxerstudios-streaming:
+    image: zlosttk/anxerstudios-streaming:latest
+    container_name: anxerstudios-streaming
+    
+    environment:
+      - PGID=1000
+      - PUID=1000
+      - TZ=America/Bogota
+      - FLASK_ENV=production
+      - FLASK_DEBUG=false
+    
+    ports:
+      - "1234:1234"
+    
+    volumes:
+      - /DATA/AppData/anxerstudios-streaming/app/config:/app/config
+      - /DATA/AppData/anxerstudios-streaming/logs:/app/logs
+```
+
+## Resource Limits
+
+### CPU Configuration
+
+<ParamField path="cpu_shares" type="integer" default="90">
+  Relative weight for CPU allocation. Higher values get more CPU time.
+  
+  ```yaml
+  cpu_shares: 90
+  ```
+</ParamField>
+
+### Memory Configuration
+
+<ParamField path="memory" type="string" default="3369M">
+  Maximum memory allocation for the container.
+  
+  ```yaml
+  deploy:
+    resources:
+      limits:
+        memory: 3369M
+  ```
+  
+  <Info>
+    Adjust this based on your server's available resources. For lighter loads, 1GB may be sufficient.
+  </Info>
+</ParamField>
+
+## Volume Mounts
+
+Persistent data is stored in mounted volumes:
+
+### Configuration Volume
+
+```yaml
+volumes:
+  - /DATA/AppData/anxerstudios-streaming/app/config:/app/config
+```
+
+Stores persistent configuration files that survive container restarts.
+
+### Logs Volume
+
+```yaml
+volumes:
+  - /DATA/AppData/anxerstudios-streaming/logs:/app/logs
+```
+
+Stores application logs for debugging and monitoring.
+
+<Tip>
+  Change the host paths to match your system's directory structure. For example:
+  ```yaml
+  - /home/user/streaming/config:/app/config
+  - /home/user/streaming/logs:/app/logs
+  ```
+</Tip>
+
+## Health Check Configuration
+
+The container includes health checks to ensure the service is running:
+
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "curl -f http://localhost:1234/api/secciones || exit 1"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+```
+
+<ParamField path="test" type="array">
+  Command to run for health checking. Tests if the API is responding.
+</ParamField>
+
+<ParamField path="interval" type="string" default="30s">
+  Time between health checks.
+</ParamField>
+
+<ParamField path="timeout" type="string" default="10s">
+  Maximum time to wait for health check response.
+</ParamField>
+
+<ParamField path="retries" type="integer" default="3">
+  Number of consecutive failures before marking as unhealthy.
+</ParamField>
+
+<ParamField path="start_period" type="string" default="40s">
+  Grace period before starting health checks (allows for startup time).
+</ParamField>
+
+## Network Configuration
+
+### Port Mapping
+
+```yaml
+ports:
+  - "1234:1234"
+```
+
+Maps host port 1234 to container port 1234. Change the first number to use a different host port:
+
+```yaml
+ports:
+  - "8080:1234"  # Access on http://localhost:8080
+```
+
+### Custom Network
+
+```yaml
+networks:
+  - anxerstudios-streaming
+
+networks:
+  anxerstudios-streaming:
+    name: anxerstudios-streaming
+    driver: bridge
+```
+
+Creates an isolated bridge network for the container.
+
+## Development Environment
+
+For local development without Docker:
+
+### Python Virtual Environment
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# or
+.venv\Scripts\activate  # Windows
+```
+
+### Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+Required packages:
+- `flask` - Web framework
+- `flask-cors` - CORS support
+- `beautifulsoup4` - HTML parsing
+- `adblockparser` - Ad blocking
+- `cloudscraper` - Cloudflare bypass
+- `pytest` - Testing framework
+
+### Run Development Server
+
+```bash
+python -m backend.app
+```
+
+The server will start with debug mode enabled by default in `app.py`:
+
+```python
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port="1234")
+```
+
+## Production Environment
+
+### Docker Deployment
+
+For production deployment, use the provided Docker configuration:
+
+```bash
+cd docker
+docker-compose up -d
+```
+
+### Environment File
+
+Create a `.env` file for easier environment management:
+
+```bash
+# .env
+PGID=1000
+PUID=1000
+TZ=America/New_York
+FLASK_ENV=production
+FLASK_DEBUG=false
+CONTAINER_PORT=1234
+HOST_PORT=1234
+```
+
+Then reference it in `docker-compose.yml`:
+
+```yaml
+services:
+  anxerstudios-streaming:
+    env_file: .env
+    ports:
+      - "${HOST_PORT}:${CONTAINER_PORT}"
+```
+
+## CasaOS Configuration
+
+Special configuration for CasaOS deployment:
+
+```yaml
+x-casaos:
+  author: ZLostTK
+  category: Entertainment
+  hostname: linuxlite.local
+  icon: https://icon.casaos.io/main/all/anxerstudios-streaming.png
+  index: /
+  port_map: "1234"
+  scheme: http
+  store_app_id: anxerstudios-streaming
+  title:
+    custom: "AnxerStudios Streaming"
+    en_us: "AnxerStudios Streaming"
+```
+
+<Info>
+  CasaOS uses these metadata fields to properly display and configure the application in its UI.
+</Info>
+
+## Environment-Specific Configuration
+
+### Development
+
+```yaml
+environment:
+  - FLASK_ENV=development
+  - FLASK_DEBUG=true
+  - TZ=UTC
+```
+
+### Staging
+
+```yaml
+environment:
+  - FLASK_ENV=production
+  - FLASK_DEBUG=false
+  - TZ=America/New_York
+  - LOG_LEVEL=INFO
+```
+
+### Production
+
+```yaml
+environment:
+  - FLASK_ENV=production
+  - FLASK_DEBUG=false
+  - TZ=America/Bogota
+  - LOG_LEVEL=WARNING
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Container won't start">
+    - Check if port 1234 is already in use
+    - Verify volume paths exist and are accessible
+    - Check Docker logs: `docker logs anxerstudios-streaming`
+    - Ensure required dependencies are installed in the image
+  </Accordion>
+  
+  <Accordion title="Permission errors in container">
+    - Verify `PUID` and `PGID` match your user
+    - Check volume mount permissions
+    - Run: `docker exec anxerstudios-streaming id` to verify user
+  </Accordion>
+  
+  <Accordion title="Health check failing">
+    - Verify the container has fully started (wait for start_period)
+    - Check if port 1234 is accessible inside container
+    - Test manually: `docker exec anxerstudios-streaming curl localhost:1234/api/secciones`
+    - Review Flask logs for errors
+  </Accordion>
+  
+  <Accordion title="Timezone not updating">
+    - Verify `TZ` environment variable is set correctly
+    - Restart the container after changing timezone
+    - Check timezone inside container: `docker exec anxerstudios-streaming date`
+  </Accordion>
+</AccordionGroup>
+
+## Environment Variables Best Practices
+
+<Steps>
+  <Step title="Use .env Files">
+    Keep environment variables in `.env` files for easier management and keep them out of version control.
+  </Step>
+  
+  <Step title="Secure Sensitive Data">
+    Never commit sensitive environment variables to version control. Use `.gitignore` to exclude `.env` files.
+  </Step>
+  
+  <Step title="Document All Variables">
+    Provide an `.env.example` file with all required variables (without sensitive values).
+  </Step>
+  
+  <Step title="Validate on Startup">
+    Implement startup checks to ensure required environment variables are set.
+  </Step>
+</Steps>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Backend Configuration" icon="server" href="/configuration/backend-config">
+    Configure the Flask backend server
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/installation/docker-deployment">
+    Deploy with Docker and Docker Compose
+  </Card>
+</CardGroup>

@@ -1,0 +1,587 @@
+---
+title: 'Extractor System Architecture'
+description: 'Deep dive into the modular extractor system for web scraping and content extraction'
+---
+
+## Overview
+
+The extractor system is the core of Web Scraping Hub's data acquisition layer. It consists of specialized, modular extractors that parse HTML content to extract structured data for movies, series, anime, and video players. Each extractor is designed to handle specific content types while sharing common utilities.
+
+## Extractor Architecture
+
+```
+Extractor System
+├── HTTP Client Layer (CloudScraper)
+│   └── Cloudflare bypass + Ad blocking
+├── Generic Extractor
+│   ├── Catalog listings
+│   └── Movie information
+├── Series Extractor
+│   ├── Episode lists
+│   └── Series metadata
+└── IFrame Extractor
+    └── Video player URLs
+```
+
+## HTTP Client Layer
+
+All extractors use the HTTP client module (`backend/utils/http_client.py:1-33`):
+
+```python backend/utils/http_client.py
+import cloudscraper
+
+_scraper = cloudscraper.create_scraper()
+
+def fetch_html(url):
+    """
+    Obtiene el HTML de una URL usando cloudscraper (supera Cloudflare y anti-bot).
+    Retorna el texto de la respuesta o None en caso de error.
+    """
+    try:
+        response = _scraper.get(url, timeout=30)
+        if response.status_code == 200:
+            return response.text
+        print(f"[ERROR] fetch_html: status {response.status_code} para {url}")
+    except Exception as e:
+        print(f"[ERROR] fetch_html: {e}")
+    return None
+
+def fetch_json(url):
+    """
+    Obtiene JSON de una URL usando cloudscraper.
+    Retorna el objeto JSON parseado o None en caso de error.
+    """
+    try:
+        response = _scraper.get(url, timeout=30)
+        if response.status_code == 200:
+            return response.json()
+        print(f"[ERROR] fetch_json: status {response.status_code} para {url}")
+    except Exception as e:
+        print(f"[ERROR] fetch_json: {e}")
+    return None
+```
+
+<Info>
+**CloudScraper Features:**
+- Bypasses Cloudflare protection automatically
+- Handles JavaScript challenges
+- 30-second timeout for resilience
+- Maintains session cookies across requests
+</Info>
+
+## Generic Extractor
+
+Handles catalog listings and movie information extraction (`backend/extractors/generic_extractor.py:1-91`).
+
+### Catalog Listing Extraction
+
+Extracts content items from catalog pages:
+
+```python backend/extractors/generic_extractor.py
+from bs4 import BeautifulSoup
+
+def extraer_listado(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    articulos = soup.select('article.item')
+    datos = []
+    
+    for articulo in articulos:
+        try:
+            poster = articulo.select_one('.poster')
+            enlace = articulo.select_one('a')['href']
+            id_post = articulo.get('data-id', 'N/A')
+            slug = enlace.rstrip('/').split('/')[-1]
+            
+            # Extract title
+            titulo = poster.select_one('h3').text.strip() if poster.select_one('h3') else ''
+            
+            # Extract image with lazy-load handling
+            img_tag = poster.select_one('img')
+            imagen = ''
+            if img_tag:
+                # Priority: data-srcset > data-src > data-lazy-src > src
+                imagen = (img_tag.get('data-srcset') or 
+                         img_tag.get('data-src') or 
+                         img_tag.get('data-lazy-src') or 
+                         img_tag.get('src', ''))
+                
+                # Fallback to noscript if placeholder detected
+                if 'data:image' in imagen:
+                    noscript = articulo.select_one('noscript img')
+                    if noscript:
+                        imagen = noscript.get('src', imagen)
+                
+                # Clean srcset (remove size descriptors)
+                if ',' in imagen:
+                    imagen = imagen.split(',')[0].split(' ')[0]
+            
+            alt = img_tag.get('alt', '') if img_tag else ''
+            year = poster.select_one('.data p').text.strip() if poster.select_one('.data p') else ''
+            generos = poster.select_one('.data span').text.strip() if poster.select_one('.data span') else ''
+            
+            # Detect language and type
+            idioma = 'Latino' if poster.select_one('.audio .latino') else 'Otro'
+            tipo = ('pelicula' if 'movies' in articulo.get('class', []) 
+                   else 'serie' if 'tvshows' in articulo.get('class', []) 
+                   else 'Otro')
+            
+            datos.append({
+                "id": id_post,
+                "slug": slug,
+                "titulo": titulo,
+                "alt": alt,
+                "imagen": imagen,
+                "year": year,
+                "generos": generos,
+                "idioma": idioma,
+                "tipo": tipo,
+                "url": enlace
+            })
+        except Exception as e:
+            print(f"[ERROR] Falló al parsear un artículo: {e}")
+    
+    return datos
+```
+
+**Key Features:**
+- **Lazy Load Handling**: Detects and extracts images from various lazy-loading implementations
+- **Fallback Logic**: Uses noscript tags if main image is placeholder
+- **Error Resilience**: Individual item failures don't break entire extraction
+- **Type Detection**: Automatically identifies movies, series, or anime
+
+### Movie Information Extraction
+
+Extracts detailed metadata from movie pages:
+
+```python backend/extractors/generic_extractor.py
+def extraer_info_pelicula(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # Extract title
+    titulo = soup.select_one('div.data h1')
+    titulo = titulo.text.strip() if titulo else 'No encontrado'
+    
+    # Extract synopsis
+    sinopsis_div = soup.find('div', itemprop='description')
+    sinopsis = sinopsis_div.find('p').text.strip() if sinopsis_div and sinopsis_div.find('p') else ''
+    
+    # Extract release date
+    fecha_estreno = soup.find('span', itemprop='dateCreated')
+    fecha_estreno = fecha_estreno.text.strip() if fecha_estreno else ''
+    
+    # Extract genres
+    generos_div = soup.find('div', class_='sgeneros')
+    generos = [a.text.strip() for a in generos_div.find_all('a')] if generos_div else []
+    
+    # Extract poster with multiple fallbacks
+    poster_img = soup.select_one('div.poster img')
+    imagen_poster = ''
+    if poster_img:
+        imagen_poster = (poster_img.get('data-src') or 
+                        poster_img.get('data-lazy-src') or 
+                        poster_img.get('src', ''))
+        
+        # Fallback to noscript
+        if 'data:image' in imagen_poster:
+            noscript = soup.select_one('div.poster noscript img')
+            if noscript:
+                imagen_poster = noscript.get('src', imagen_poster)
+    
+    # Final fallback to Open Graph metadata
+    if not imagen_poster or 'data:image' in imagen_poster:
+        og_image = soup.find('meta', property='og:image')
+        if og_image:
+            imagen_poster = og_image.get('content', imagen_poster)
+        else:
+            twitter_image = soup.find('meta', name='twitter:image')
+            if twitter_image:
+                imagen_poster = twitter_image.get('content', imagen_poster)
+    
+    return {
+        'titulo': titulo,
+        'sinopsis': sinopsis,
+        'fecha_estreno': fecha_estreno,
+        'generos': generos,
+        'imagen_poster': imagen_poster
+    }
+```
+
+**Extraction Strategy:**
+1. Primary: Extract from main content areas
+2. Secondary: Fall back to noscript tags
+3. Tertiary: Use Open Graph meta tags
+4. Quaternary: Use Twitter Card meta tags
+
+## Series Extractor
+
+Handles series and anime content with episode listings (`backend/extractors/serie_extractor.py:1-81`).
+
+### Episode and Metadata Extraction
+
+```python backend/extractors/serie_extractor.py
+from bs4 import BeautifulSoup
+from backend.utils.http_client import fetch_html
+
+def extraer_episodios_serie(url):
+    html = fetch_html(url)
+    if not html:
+        print(f"[ERROR] No se pudo acceder a la URL: {url}")
+        return {"info": {}, "episodios": []}
+    
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # Extract synopsis
+    sinopsis = soup.select_one('div[itemprop="description"].wp-content')
+    sinopsis = sinopsis.text.strip() if sinopsis else ''
+    
+    # Extract title (robust approach)
+    titulo = ''
+    titulo_data = soup.select_one('div.data h1')
+    if titulo_data:
+        titulo = titulo_data.text.strip()
+    else:
+        titulo_alt = soup.select_one('h1.entry-title')
+        titulo = titulo_alt.text.strip() if titulo_alt else ''
+    
+    # Extract genres
+    generos_div = soup.find('div', class_='sgeneros')
+    generos = [a.text.strip() for a in generos_div.find_all('a')] if generos_div else []
+    
+    # Extract poster image
+    poster_img = soup.select_one('div.poster img')
+    imagen_poster = ''
+    if poster_img:
+        imagen_poster = (poster_img.get('data-src') or 
+                        poster_img.get('data-lazy-src') or 
+                        poster_img.get('src', ''))
+        
+        # Fallback to noscript
+        if 'data:image' in imagen_poster:
+            noscript = soup.select_one('div.poster noscript img')
+            if noscript:
+                imagen_poster = noscript.get('src', imagen_poster)
+    
+    # Fallback to OG Tags
+    if not imagen_poster or 'data:image' in imagen_poster:
+        og_image = soup.find('meta', property='og:image')
+        if og_image:
+            imagen_poster = og_image.get('content', imagen_poster)
+    
+    # Extract episodes by season
+    temporadas_divs = soup.select('#seasons .se-c')
+    episodios_data = []
+    fechas_episodios = []
+    
+    for temporada_div in temporadas_divs:
+        num_temporada = int(temporada_div.get('data-season', 0))
+        episodios = temporada_div.select('li')
+        
+        for episodio in episodios:
+            try:
+                enlace_episodio = episodio.select_one('a')['href']
+                titulo_ep = episodio.select_one('.epst').text.strip() if episodio.select_one('.epst') else ''
+                numerando = episodio.select_one('.numerando').text.strip() if episodio.select_one('.numerando') else ''
+                numero_ep = int(numerando.split('-')[-1].strip()) if numerando else 0
+                fecha = episodio.select_one('.date').text.strip() if episodio.select_one('.date') else ''
+                
+                if fecha:
+                    fechas_episodios.append(fecha)
+                
+                # Extract episode image
+                img_ep = episodio.select_one('img')
+                imagen = ''
+                if img_ep:
+                    imagen = (img_ep.get('data-src') or 
+                             img_ep.get('data-lazy-src') or 
+                             img_ep.get('src', ''))
+                    if 'data:image' in imagen and img_ep.get('data-src'):
+                        imagen = img_ep.get('data-src')
+                
+                episodios_data.append({
+                    "temporada": num_temporada,
+                    "episodio": numero_ep,
+                    "titulo": titulo_ep,
+                    "fecha": fecha,
+                    "imagen": imagen,
+                    "url": enlace_episodio
+                })
+            except Exception as e:
+                print(f"⚠️ Error en episodio: {e}")
+    
+    # Use first episode date as release date
+    fecha_estreno = fechas_episodios[0] if fechas_episodios else ''
+    
+    info = {
+        "titulo": titulo,
+        "sinopsis": sinopsis,
+        "generos": generos,
+        "imagen_poster": imagen_poster,
+        "fecha_estreno": fecha_estreno
+    }
+    
+    return {"info": info, "episodios": episodios_data}
+```
+
+**Episode Extraction Features:**
+- Extracts all episodes grouped by season
+- Handles missing or malformed episode data
+- Parses episode numbers from formatted strings
+- Collects episode air dates
+- Provides rich metadata alongside episode list
+
+## IFrame Extractor
+
+Extracts video player URLs from content pages (`backend/extractors/iframe_extractor.py:1-23`).
+
+```python backend/extractors/iframe_extractor.py
+from bs4 import BeautifulSoup
+from backend.utils.adblocker import clean_html_ads
+from backend.utils.http_client import fetch_html
+
+def extraer_iframe_reproductor(url):
+    html = fetch_html(url)
+    if not html:
+        print(f"❌ Error al acceder a: {url}")
+        return None
+    
+    # Clean ads before parsing
+    html_limpio = clean_html_ads(html)
+    soup = BeautifulSoup(html_limpio, 'html.parser')
+    
+    # Find player iframe
+    iframe = soup.select_one('.dooplay_player iframe')
+    if iframe and iframe.get('src'):
+        url_reproductor = iframe['src']
+        return {
+            "player_url": url_reproductor,
+            "fuente": url_reproductor.split('/')[2],  # Extract domain
+            "formato": "iframe"
+        }
+    else:
+        print("⚠️ No se encontró iframe de reproducción.")
+        return None
+```
+
+**Key Features:**
+- **Ad Blocking**: Removes ad-related scripts and iframes before parsing
+- **Clean Extraction**: Targets specific player container
+- **Metadata**: Extracts source domain and format
+
+## Ad Blocking System
+
+The ad blocker (`backend/utils/adblocker.py:1-33`) uses EasyList rules:
+
+```python backend/utils/adblocker.py
+from bs4 import BeautifulSoup
+import os
+from adblockparser import AdblockRules
+
+def load_easylist_rules(filepath):
+    rules = []
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            # Ignore comments and exception rules
+            if not line or line.startswith(('!', '#', '[', '@@', '##', '#@#')):
+                continue
+            rules.append(line)
+    return rules
+
+EASYLIST_PATH = os.path.join(os.path.dirname(__file__), 'easylist.txt')
+EASYLIST_RULES = load_easylist_rules(EASYLIST_PATH)
+ADBLOCK_RULES = AdblockRules(EASYLIST_RULES)
+
+def clean_html_ads(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # Remove blocked scripts
+    for script in soup.find_all('script', src=True):
+        src = script['src']
+        if ADBLOCK_RULES.should_block(src, {'script': True}):
+            script.decompose()
+    
+    # Remove blocked iframes
+    for iframe in soup.find_all('iframe', src=True):
+        src = iframe['src']
+        if ADBLOCK_RULES.should_block(src, {'subdocument': True}):
+            iframe.decompose()
+    
+    return str(soup)
+```
+
+<Warning>
+**Performance Note**: Ad blocking adds processing overhead. The EasyList rules are loaded once at startup for efficiency.
+</Warning>
+
+## Extractor Design Patterns
+
+### 1. Graceful Degradation
+
+Extractors attempt multiple extraction methods before failing:
+
+```python
+# Priority chain for image extraction
+image = (
+    img_tag.get('data-srcset') or      # Lazy load srcset
+    img_tag.get('data-src') or         # Lazy load src
+    img_tag.get('data-lazy-src') or    # Alternative lazy load
+    img_tag.get('src') or              # Standard src
+    noscript_image or                  # Noscript fallback
+    og_image or                        # Open Graph meta
+    twitter_image                      # Twitter Card meta
+)
+```
+
+### 2. Error Isolation
+
+Individual item failures don't break batch operations:
+
+```python
+for articulo in articulos:
+    try:
+        # Extract item data
+        datos.append(item_data)
+    except Exception as e:
+        print(f"[ERROR] Failed to parse item: {e}")
+        continue  # Continue with next item
+```
+
+### 3. Robust Selectors
+
+Use multiple selector strategies:
+
+```python
+# Primary selector
+titulo_data = soup.select_one('div.data h1')
+if titulo_data:
+    titulo = titulo_data.text.strip()
+else:
+    # Fallback selector
+    titulo_alt = soup.select_one('h1.entry-title')
+    titulo = titulo_alt.text.strip() if titulo_alt else ''
+```
+
+### 4. Structured Output
+
+All extractors return consistent data structures:
+
+```python
+# Catalog item structure
+{
+    "id": str,
+    "slug": str,
+    "titulo": str,
+    "imagen": str,
+    "year": str,
+    "generos": str,
+    "tipo": str,
+    "url": str
+}
+
+# Series structure
+{
+    "info": {metadata_dict},
+    "episodios": [episode_list]
+}
+
+# Player structure
+{
+    "player_url": str,
+    "fuente": str,
+    "formato": str
+}
+```
+
+## Extending the Extractor System
+
+To add a new extractor:
+
+### 1. Create Extractor Module
+
+```python backend/extractors/new_extractor.py
+from bs4 import BeautifulSoup
+from backend.utils.http_client import fetch_html
+
+def extraer_nuevo_contenido(url):
+    html = fetch_html(url)
+    if not html:
+        return None
+    
+    soup = BeautifulSoup(html, 'html.parser')
+    # Implement extraction logic
+    
+    return structured_data
+```
+
+### 2. Import in Backend
+
+```python backend/app.py
+from backend.extractors.new_extractor import extraer_nuevo_contenido
+```
+
+### 3. Create API Route
+
+```python backend/app.py
+@app.route('/api/new-content/<slug>', methods=['GET'])
+def api_new_content(slug):
+    data = extraer_nuevo_contenido(f"{BASE_URL}/{slug}")
+    if not data:
+        return jsonify({"error": "Content not found"}), 404
+    return jsonify(data)
+```
+
+## Testing Extractors
+
+Extractor tests are in `backend/tests/test_extractors.py`:
+
+```python
+import unittest
+from backend.extractors.generic_extractor import extraer_listado
+
+class TestExtractors(unittest.TestCase):
+    def test_extraer_listado(self):
+        html = "<article class='item'>...</article>"
+        result = extraer_listado(html)
+        self.assertIsInstance(result, list)
+        self.assertGreater(len(result), 0)
+```
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+  <Card title="Timeout Management" icon="clock">
+    30s timeout prevents hanging on slow/failed requests
+  </Card>
+  <Card title="Session Reuse" icon="recycle">
+    CloudScraper maintains session for cookie persistence
+  </Card>
+  <Card title="Lazy Loading" icon="eye">
+    Proper handling of lazy-loaded images
+  </Card>
+  <Card title="Ad Blocking" icon="shield">
+    Reduces parsing time and improves reliability
+  </Card>
+</CardGroup>
+
+## Common Challenges
+
+### Challenge 1: Cloudflare Protection
+
+**Solution**: CloudScraper automatically handles JavaScript challenges and browser fingerprinting.
+
+### Challenge 2: Lazy-Loaded Images
+
+**Solution**: Multi-attribute checking (`data-src`, `data-srcset`, noscript fallback).
+
+### Challenge 3: Changing HTML Structure
+
+**Solution**: Multiple selector strategies and graceful fallbacks.
+
+### Challenge 4: Ad/Popup Interference
+
+**Solution**: EasyList-based ad blocking before parsing.
+
+<Card title="Related Documentation" icon="book">
+  - [Backend Architecture](/architecture/backend) - How extractors integrate with API
+  - [API Reference](/api/extractors/generic-extractor) - Extractor function signatures
+</Card>
